@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <AssemblyName>WinOptimizer</AssemblyName>
+    <RootNamespace>WinOptimizer</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>WinOptimizer 系统一键优化工具</Product>
+    <Description>模块化 Windows 10/11 系统优化与状态管理工具</Description>
+  </PropertyGroup>
+
+</Project>
