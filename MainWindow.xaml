@@ -2,9 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WinOptimizer — Windows 一键系统优化与开发环境部署工具"
-        Width="1080" Height="760"
-        MinWidth="920" MinHeight="620"
-        WindowStartupLocation="CenterScreen"
+        Width="1040" Height="680"
+        MinWidth="820" MinHeight="500"
+        WindowStartupLocation="Manual"
         Background="{StaticResource BgApp}"
         Foreground="{StaticResource TextPrimary}"
         FontFamily="Microsoft YaHei UI">
@@ -17,9 +17,9 @@
 
         <!-- 左侧导航栏 -->
         <Border Grid.Column="0" Background="{StaticResource BgSidebar}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,0,1,0">
-            <DockPanel LastChildFill="False" Margin="14,18,14,16">
-                <!-- 软件标题 Logo 区 -->
-                <StackPanel DockPanel.Dock="Top" Margin="6,0,6,20">
+            <DockPanel LastChildFill="True" Margin="14,14,14,12">
+                <!-- 软件标题 Logo 区（按住可拖动窗口） -->
+                <StackPanel DockPanel.Dock="Top" Margin="6,0,6,14" Background="Transparent" MouseLeftButtonDown="HeaderArea_MouseLeftButtonDown" Cursor="SizeAll">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Width="32" Height="32" CornerRadius="8" Background="#2563EB" Margin="0,0,10,0">
                             <TextBlock Text="&#xE9F5;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -31,81 +31,9 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- 分类组 1：系统优化 -->
-                <TextBlock DockPanel.Dock="Top" Text="系统优化 (TWEAKS)" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="10,0,0,6" />
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}" IsChecked="True"
-                             Command="{Binding NavigateCommand}" CommandParameter="ALL_TWEAKS">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="全部系统优化" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
-                             Command="{Binding NavigateCommand}" CommandParameter="CAT_GAMING">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="游戏与低延迟" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
-                             Command="{Binding NavigateCommand}" CommandParameter="CAT_PERFORMANCE">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="性能与电源" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
-                             Command="{Binding NavigateCommand}" CommandParameter="CAT_SECURITY">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xEA18;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="安全与防火墙" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
-                             Command="{Binding NavigateCommand}" CommandParameter="CAT_DESKTOP">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="桌面与右键菜单" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
-                             Command="{Binding NavigateCommand}" CommandParameter="CAT_UPDATE">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="系统更新控制" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
-                <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource BorderSubtle}" Margin="6,14" />
-
-                <!-- 分类组 2：环境安装与右键管理 -->
-                <TextBlock DockPanel.Dock="Top" Text="扩展与定制管理 (TOOLS)" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="10,0,0,6" />
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
-                             Command="{Binding NavigateCommand}" CommandParameter="CTX_MENU">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="右键菜单管理" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
-                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
-                             Command="{Binding NavigateCommand}" CommandParameter="ENV_ALL">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE943;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="开发环境安装" VerticalAlignment="Center" />
-                    </StackPanel>
-                </RadioButton>
-
                 <!-- 底部系统信息与常用快捷工具 -->
-                <StackPanel DockPanel.Dock="Bottom">
-                    <Button Style="{StaticResource SecondaryBtn}" Command="{Binding PurgeStandbyRamCommand}" Margin="0,0,0,7" HorizontalContentAlignment="Center"
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <Button Style="{StaticResource SecondaryBtn}" Command="{Binding PurgeStandbyRamCommand}" Margin="0,0,0,6" HorizontalContentAlignment="Center"
                             ToolTip="调用原生 NtSetSystemInformation 秒清系统堆积的备用缓存内存（打永劫前或连玩几局后点一下防掉帧）">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" Foreground="#34D399" VerticalAlignment="Center" Margin="0,0,7,0" FontSize="12" />
@@ -113,7 +41,7 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Style="{StaticResource SecondaryBtn}" Command="{Binding CleanShaderCacheCommand}" Margin="0,0,0,7" HorizontalContentAlignment="Center"
+                    <Button Style="{StaticResource SecondaryBtn}" Command="{Binding CleanShaderCacheCommand}" Margin="0,0,0,6" HorizontalContentAlignment="Center"
                             ToolTip="安全清理 DXCache / GLCache / D3DSCache 中未被占用的旧版着色器缓存（更新显卡驱动或游戏赛季更新后推荐使用）">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" Foreground="#60A5FA" VerticalAlignment="Center" Margin="0,0,7,0" FontSize="12" />
@@ -121,20 +49,97 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RestartExplorerCommand}" Margin="0,0,0,10" HorizontalContentAlignment="Center">
+                    <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RestartExplorerCommand}" Margin="0,0,0,8" HorizontalContentAlignment="Center">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,7,0" FontSize="12" />
                             <TextBlock Text="重启资源管理器" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
 
-                    <Border Background="#10131B" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="7" Padding="10,8">
+                    <Border Background="#10131B" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="7" Padding="10,7">
                         <StackPanel>
                             <TextBlock Text="{Binding OsSummary}" FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
-                            <TextBlock Text="● 管理员权限运行中" FontSize="11" Foreground="#34D399" Margin="0,4,0,0" />
+                            <TextBlock Text="● 管理员权限运行中" FontSize="11" Foreground="#34D399" Margin="0,3,0,0" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
+
+                <!-- 中间可滚动导航列表（小屏高缩放时永不挤压） -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- 分类组 1：系统优化 -->
+                        <TextBlock Text="系统优化 (TWEAKS)" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="10,0,0,5" />
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}" IsChecked="True"
+                                     Command="{Binding NavigateCommand}" CommandParameter="ALL_TWEAKS">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="全部系统优化" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="CAT_GAMING">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="游戏与低延迟" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="CAT_PERFORMANCE">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="性能与电源" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="CAT_SECURITY">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xEA18;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="安全与防火墙" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="CAT_DESKTOP">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="桌面与右键菜单" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="CAT_UPDATE">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="系统更新控制" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="6,10" />
+
+                        <!-- 分类组 2：环境安装与右键管理 -->
+                        <TextBlock Text="扩展与定制管理 (TOOLS)" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="10,0,0,5" />
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="CTX_MENU">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="右键菜单管理" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="ENV_ALL">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE943;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="开发环境安装" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+                    </StackPanel>
+                </ScrollViewer>
             </DockPanel>
         </Border>
 
@@ -144,11 +149,12 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="195" />
+                <RowDefinition Height="155" />
             </Grid.RowDefinitions>
 
-            <!-- 顶部标题与批量操作栏 -->
-            <Border Grid.Row="0" Padding="24,18,24,14" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,0,0,1">
+            <!-- 顶部标题与批量操作栏（空白处按住可直接拖动窗口） -->
+            <Border Grid.Row="0" Padding="24,14,24,12" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,0,0,1"
+                    Background="Transparent" MouseLeftButtonDown="HeaderArea_MouseLeftButtonDown">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
