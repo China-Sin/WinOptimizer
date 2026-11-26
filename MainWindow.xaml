@@ -275,7 +275,7 @@
                                         <TextBlock Text="一键安装勾选环境" />
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding SelectRecommendedEnvsCommand}" Margin="0,0,8,0" Content="勾选推荐装机组合 (Python + Node + Git + VC++)" />
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding SelectRecommendedEnvsCommand}" Margin="0,0,8,0" Content="勾选全部未安装环境" />
                                 <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RefreshAllCommand}" Content="刷新版本检测" />
                             </WrapPanel>
 

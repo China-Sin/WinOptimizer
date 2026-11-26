@@ -54,10 +54,9 @@
 28. **精简后台诊断遥测、广告推送与开始菜单联网 Bing 搜索**。
 29. **暂停 Windows 自动更新 100 年**：写入 `FlightSettingsMaxPauseDays=36524` 并自动生成 100 年后到期时间戳，无需手动翻下拉框。
 
-### 五、开发环境与工具一键部署（12 项）
+### 五、开发环境一键部署（5 项）
 基于微软官方 `winget` 静默部署并自动刷新 `PATH`，支持版本实时检测、批量安装、检查更新与卸载：
-- **语言与运行库**：Python 3.12、Node.js LTS、Go、Rust (`rustup`)、Java JDK 21 LTS、.NET 8 SDK、Visual C++ 2015–2022 运行库
-- **常用工具**：Git for Windows、`uv`、Visual Studio Code、7-Zip、Windhawk
+- Python 3.12、Node.js LTS、Git for Windows、.NET 8.0 SDK、Visual C++ 2015–2022 运行库 (x64)
 
 ### 六、右键菜单自定义管理（Context Menu Manager）
 - 自动扫描 **桌面空白处、文件 (*)、文件夹、驱动器** 全部 `shell` 命令与 `shellex\ContextMenuHandlers` 扩展项，支持中文资源名解析（如 PeaZip、Git GUI/Bash、NVIDIA App/控制面板、便捷设置等）。
