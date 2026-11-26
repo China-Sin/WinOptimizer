@@ -137,3 +137,53 @@ public sealed class EnvItemViewModel : ObservableObject
         }
     }
 }
+
+public sealed class ContextMenuItemViewModel : ObservableObject
+{
+    public ContextMenuEntry Entry { get; }
+
+    private bool _isSelectedForBatch;
+    private bool _isMenuEnabled;
+    private bool _isBusy;
+
+    public ContextMenuItemViewModel(ContextMenuEntry entry)
+    {
+        Entry = entry;
+        _isMenuEnabled = entry.IsEnabled;
+    }
+
+    public string DisplayName => Entry.DisplayName;
+    public string KeyName => Entry.KeyName;
+    public string ScopeKey => Entry.ScopeKey;
+    public string ScopeLabel => Entry.ScopeLabel;
+    public string KindLabel => Entry.KindLabel;
+    public string FullRegistryPath => Entry.FullRegistryPath;
+    public bool CanDelete => !Entry.IsProtectedSystemItem;
+
+    public bool IsSelectedForBatch
+    {
+        get => _isSelectedForBatch;
+        set => SetProperty(ref _isSelectedForBatch, value);
+    }
+
+    public bool IsMenuEnabled
+    {
+        get => _isMenuEnabled;
+        set
+        {
+            if (SetProperty(ref _isMenuEnabled, value))
+            {
+                Entry.IsEnabled = value;
+                OnPropertyChanged(nameof(StatusBadgeText));
+            }
+        }
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set => SetProperty(ref _isBusy, value);
+    }
+
+    public string StatusBadgeText => IsMenuEnabled ? "已显示" : "已隐藏";
+}

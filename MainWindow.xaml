@@ -84,8 +84,16 @@
 
                 <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource BorderSubtle}" Margin="6,14" />
 
-                <!-- 分类组 2：环境安装 -->
-                <TextBlock DockPanel.Dock="Top" Text="软件与环境部署 (INSTALL)" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="10,0,0,6" />
+                <!-- 分类组 2：环境安装与右键管理 -->
+                <TextBlock DockPanel.Dock="Top" Text="扩展与定制管理 (TOOLS)" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="10,0,0,6" />
+
+                <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
+                             Command="{Binding NavigateCommand}" CommandParameter="CTX_MENU">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock Text="右键菜单管理" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
 
                 <RadioButton DockPanel.Dock="Top" Style="{StaticResource NavRadioStyle}"
                              Command="{Binding NavigateCommand}" CommandParameter="ENV_ALL">
@@ -214,6 +222,27 @@
                                                  Command="{Binding SetStatusFilterCommand}" CommandParameter="UNOPTIMIZED" />
                                 </StackPanel>
                             </Border>
+
+                            <Border Visibility="{Binding IsContextMenuView, Converter={StaticResource BoolToVis}}"
+                                    Background="#151924" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="7" Padding="3">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton GroupName="CtxScopeGroup" Style="{StaticResource FilterPillRadioStyle}" IsChecked="True"
+                                                 Content="桌面空白处"
+                                                 Command="{Binding SetCtxScopeFilterCommand}" CommandParameter="DESKTOP" />
+                                    <RadioButton GroupName="CtxScopeGroup" Style="{StaticResource FilterPillRadioStyle}"
+                                                 Content="文件 (*)"
+                                                 Command="{Binding SetCtxScopeFilterCommand}" CommandParameter="FILE" />
+                                    <RadioButton GroupName="CtxScopeGroup" Style="{StaticResource FilterPillRadioStyle}"
+                                                 Content="文件夹"
+                                                 Command="{Binding SetCtxScopeFilterCommand}" CommandParameter="FOLDER" />
+                                    <RadioButton GroupName="CtxScopeGroup" Style="{StaticResource FilterPillRadioStyle}"
+                                                 Content="驱动器"
+                                                 Command="{Binding SetCtxScopeFilterCommand}" CommandParameter="DRIVE" />
+                                    <RadioButton GroupName="CtxScopeGroup" Style="{StaticResource FilterPillRadioStyle}"
+                                                 Content="全部"
+                                                 Command="{Binding SetCtxScopeFilterCommand}" CommandParameter="ALL" />
+                                </StackPanel>
+                            </Border>
                         </Grid>
 
                         <!-- 左侧批量按钮区 -->
@@ -242,6 +271,18 @@
                                 </Button>
                                 <Button Style="{StaticResource SecondaryBtn}" Command="{Binding SelectRecommendedEnvsCommand}" Margin="0,0,8,0" Content="勾选推荐装机组合 (Python + Node + Git + VC++)" />
                                 <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RefreshAllCommand}" Content="刷新版本检测" />
+                            </WrapPanel>
+
+                            <!-- 右键菜单管理模式的工具栏 -->
+                            <WrapPanel Visibility="{Binding IsContextMenuView, Converter={StaticResource BoolToVis}}">
+                                <Button Style="{StaticResource PrimaryBtn}" Command="{Binding HideSelectedContextMenusCommand}" Margin="0,0,10,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xED1A;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="一键隐藏勾选项" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding EnableSelectedContextMenusCommand}" Margin="0,0,8,0" Content="批量恢复显示" />
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RefreshAllCommand}" Content="重新扫描右键" />
                             </WrapPanel>
                         </Grid>
                     </DockPanel>
@@ -417,6 +458,93 @@
                                                     Command="{Binding DataContext.UninstallSingleEnvCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding}" />
                                         </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 3. 右键菜单自定义管理卡片列表 -->
+                <ScrollViewer Visibility="{Binding IsContextMenuView, Converter={StaticResource BoolToVis}}"
+                              VerticalScrollBarVisibility="Auto" Padding="24,14,24,14">
+                    <ItemsControl ItemsSource="{Binding FilteredContextMenus}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
+                                        CornerRadius="10" Padding="16,12" Margin="0,0,0,9">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <CheckBox Grid.Column="0" Style="{StaticResource ModernCheckBox}"
+                                                  IsChecked="{Binding IsSelectedForBatch}" Margin="0,0,14,0" />
+
+                                        <Border Grid.Column="1" Width="36" Height="36" CornerRadius="8" Background="#232A3B" VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#A78BFA"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                                                <Border Background="#232B3E" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ScopeLabel}" FontSize="10.5" Foreground="#93C5FD" />
+                                                </Border>
+                                                <Border Background="#1F2433" CornerRadius="4" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding KindLabel}" FontSize="10.5" Foreground="#CBD5E1" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding FullRegistryPath}" FontSize="11" Foreground="{StaticResource TextMuted}"
+                                                       FontFamily="Consolas" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+                                        </StackPanel>
+
+                                        <!-- 显示/隐藏状态徽章 -->
+                                        <Border Grid.Column="3" VerticalAlignment="Center" CornerRadius="6" Padding="10,4" Margin="0,0,12,0" BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#232836" />
+                                                    <Setter Property="BorderBrush" Value="#333B4F" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMenuEnabled}" Value="True">
+                                                            <Setter Property="Background" Value="#122D23" />
+                                                            <Setter Property="BorderBrush" Value="#1F513D" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding StatusBadgeText}" FontSize="11.5" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#94A3B8" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsMenuEnabled}" Value="True">
+                                                                <Setter Property="Foreground" Value="#34D399" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+
+                                        <!-- 无损隐藏/显示胶囊开关 -->
+                                        <Button Grid.Column="4" Style="{StaticResource ContextMenuToggleStyle}"
+                                                ToolTip="开启 = 在右键菜单中显示；关闭 = 无损隐藏（随时可重新打开）"
+                                                Command="{Binding DataContext.ToggleSingleContextMenuCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+
+                                        <!-- 第三方项彻底删除按钮（系统核心项自动隐藏防误删） -->
+                                        <Button Grid.Column="5" Style="{StaticResource SecondaryBtn}" Content="删除" Margin="8,0,0,0" Padding="9,4" FontSize="11.5"
+                                                Visibility="{Binding CanDelete, Converter={StaticResource BoolToVis}}"
+                                                ToolTip="永久删除此第三方右键注册表项（带二次确认）"
+                                                Command="{Binding DataContext.DeleteSingleContextMenuCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
