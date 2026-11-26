@@ -27,7 +27,7 @@
 7. **NVIDIA 着色器缓存扩容至「无限制」**：通过官方 `nvapi64.dll` DRS 接口直接写入全局 3D 配置（`0x00AC8497 = 0xFFFFFFFF`），消除初见特效编译卡顿。
 8. **彻底关闭鼠标加速（1:1 原始输入）**：清零指针曲线并调用 `SPI_SETMOUSE` 免重启实时生效。
 9. **关闭内核隔离「内存完整性」(HVCI / VBS)**：消除虚拟化二级地址转换损耗，提升平均帧与 1% Low 帧。
-10. **关闭 GameDVR 后台录屏 + 锁定开启游戏模式**：关闭 Xbox 静默视频捕获缓存，同时保留系统 `Game Mode` 调度。
+10. **关闭 Game Bar & 禁用 Windows 游戏录制和广播（保留游戏模式）**：关闭 Xbox Game Bar 覆盖层、手柄唤醒与启动提示，禁用组策略「Windows 游戏录制和广播」及后台广播服务 (`BcastDVRUserService`)，同时保留系统 `Game Mode` 调度。
 11. **MMCSS 游戏调度优先级拉满 & 解除网络节流**：`NetworkThrottlingIndex=FFFFFFFF`、`SystemResponsiveness=0` 与 `Tasks\Games` 高权重。
 12. **硬件加速 GPU 计划 (HAGS) 开关**：支持 DLSS 3/4 帧生成必开切换或双屏掉帧排障。
 13. **关闭多平面叠加 (MPO)**：写入 `OverlayTestMode=5`，修复高刷/双屏切屏黑屏与视频花屏。
