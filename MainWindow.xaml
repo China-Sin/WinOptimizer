@@ -132,6 +132,14 @@
                         </RadioButton>
 
                         <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="STARTUP_MGR">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="开机启动项管理" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
                                      Command="{Binding NavigateCommand}" CommandParameter="ENV_ALL">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE943;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -249,6 +257,21 @@
                                                  Command="{Binding SetCtxScopeFilterCommand}" CommandParameter="ALL" />
                                 </StackPanel>
                             </Border>
+
+                            <Border Visibility="{Binding IsStartupView, Converter={StaticResource BoolToVis}}"
+                                    Background="#151924" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="7" Padding="3">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton GroupName="StartupStatusGroup" Style="{StaticResource FilterPillRadioStyle}" IsChecked="True"
+                                                 Content="{Binding FilterAllStartupsLabel}"
+                                                 Command="{Binding SetStartupFilterCommand}" CommandParameter="ALL" />
+                                    <RadioButton GroupName="StartupStatusGroup" Style="{StaticResource FilterPillRadioStyle}"
+                                                 Content="{Binding FilterEnabledStartupsLabel}"
+                                                 Command="{Binding SetStartupFilterCommand}" CommandParameter="ENABLED" />
+                                    <RadioButton GroupName="StartupStatusGroup" Style="{StaticResource FilterPillRadioStyle}"
+                                                 Content="{Binding FilterDisabledStartupsLabel}"
+                                                 Command="{Binding SetStartupFilterCommand}" CommandParameter="DISABLED" />
+                                </StackPanel>
+                            </Border>
                         </Grid>
 
                         <!-- 左侧批量按钮区 -->
@@ -289,6 +312,18 @@
                                 </Button>
                                 <Button Style="{StaticResource SecondaryBtn}" Command="{Binding EnableSelectedContextMenusCommand}" Margin="0,0,8,0" Content="批量恢复显示" />
                                 <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RefreshAllCommand}" Content="重新扫描右键" />
+                            </WrapPanel>
+
+                            <!-- 开机启动项管理模式的工具栏 -->
+                            <WrapPanel Visibility="{Binding IsStartupView, Converter={StaticResource BoolToVis}}">
+                                <Button Style="{StaticResource PrimaryBtn}" Command="{Binding DisableSelectedStartupsCommand}" Margin="0,0,10,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="一键禁用勾选项" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding EnableSelectedStartupsCommand}" Margin="0,0,8,0" Content="批量允许自启" />
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RefreshAllCommand}" Content="重新扫描启动项" />
                             </WrapPanel>
                         </Grid>
                     </DockPanel>
@@ -551,6 +586,101 @@
                                                 ToolTip="永久删除此第三方右键注册表项（带二次确认）"
                                                 Command="{Binding DataContext.DeleteSingleContextMenuCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 4. 开机启动项管理卡片列表 -->
+                <ScrollViewer Visibility="{Binding IsStartupView, Converter={StaticResource BoolToVis}}"
+                              VerticalScrollBarVisibility="Auto" Padding="24,14,24,14">
+                    <ItemsControl ItemsSource="{Binding FilteredStartupItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
+                                        CornerRadius="10" Padding="16,12" Margin="0,0,0,9">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <CheckBox Grid.Column="0" Style="{StaticResource ModernCheckBox}"
+                                                  IsChecked="{Binding IsSelectedForBatch}" Margin="0,0,14,0" />
+
+                                        <Border Grid.Column="1" Width="36" Height="36" CornerRadius="8" Background="#232A3B" VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#34D399"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                                                <Border Background="#232B3E" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding SourceLabel}" FontSize="10.5" Foreground="#93C5FD" />
+                                                </Border>
+                                                <Border Visibility="{Binding TargetFileMissing, Converter={StaticResource BoolToVis}}"
+                                                        Background="#3B2314" BorderBrush="#7C3F19" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="目标文件已丢失（残留）" FontSize="10.5" Foreground="#FBBF24" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Command}" FontSize="11" Foreground="{StaticResource TextMuted}"
+                                                       FontFamily="Consolas" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"
+                                                       ToolTip="{Binding Command}" />
+                                        </StackPanel>
+
+                                        <!-- 开机自启 / 已禁用徽章 -->
+                                        <Border Grid.Column="3" VerticalAlignment="Center" CornerRadius="6" Padding="10,4" Margin="0,0,12,0" BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#232836" />
+                                                    <Setter Property="BorderBrush" Value="#333B4F" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsStartupEnabled}" Value="True">
+                                                            <Setter Property="Background" Value="#122D23" />
+                                                            <Setter Property="BorderBrush" Value="#1F513D" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding StatusBadgeText}" FontSize="11.5" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#94A3B8" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsStartupEnabled}" Value="True">
+                                                                <Setter Property="Foreground" Value="#34D399" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+
+                                        <!-- 与任务管理器同步的无损开关 -->
+                                        <Button Grid.Column="4" Style="{StaticResource StartupToggleStyle}"
+                                                ToolTip="开启 = 允许开机自动启动；关闭 = 无损禁用（与 Windows 任务管理器完全同步）"
+                                                Command="{Binding DataContext.ToggleSingleStartupCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+
+                                        <!-- 定位源文件 & 永久删除残留项 -->
+                                        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                            <Button Style="{StaticResource SecondaryBtn}" Content="定位" Padding="8,4" FontSize="11.5"
+                                                    Visibility="{Binding CanLocate, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="在文件资源管理器中选中该启动项对应的程序文件"
+                                                    Command="{Binding DataContext.LocateStartupFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Style="{StaticResource SecondaryBtn}" Content="删除" Margin="6,0,0,0" Padding="8,4" FontSize="11.5"
+                                                    ToolTip="从注册表或启动文件夹永久删除此自启项（带二次确认）"
+                                                    Command="{Binding DataContext.DeleteSingleStartupCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
                             </DataTemplate>

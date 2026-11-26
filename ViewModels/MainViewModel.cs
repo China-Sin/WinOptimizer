@@ -11,11 +11,13 @@ public sealed class MainViewModel : ObservableObject
     private readonly List<TweakItemViewModel> _allTweaks;
     private readonly List<EnvItemViewModel> _allEnvs;
     private readonly List<ContextMenuItemViewModel> _allContextMenus = [];
+    private readonly List<StartupItemViewModel> _allStartupItems = [];
     private readonly StringBuilder _logBuilder = new();
 
     private string _selectedNavKey = "ALL_TWEAKS";
     private string _statusFilter = "ALL"; // ALL | OPTIMIZED | UNOPTIMIZED
     private string _ctxScopeFilter = "DESKTOP"; // ALL | DESKTOP | FILE | FOLDER | DRIVE
+    private string _startupFilter = "ALL"; // ALL | ENABLED | DISABLED
     private string _searchQuery = string.Empty;
     private bool _isGlobalBusy;
     private bool _showExplorerRestartBanner;
@@ -26,6 +28,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<TweakItemViewModel> FilteredTweaks { get; } = [];
     public ObservableCollection<EnvItemViewModel> FilteredEnvs { get; } = [];
     public ObservableCollection<ContextMenuItemViewModel> FilteredContextMenus { get; } = [];
+    public ObservableCollection<StartupItemViewModel> FilteredStartupItems { get; } = [];
 
     public string OsSummary { get; }
     public bool IsAdmin { get; }
@@ -51,6 +54,12 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand DeleteSingleContextMenuCommand { get; }
     public RelayCommand HideSelectedContextMenusCommand { get; }
     public RelayCommand EnableSelectedContextMenusCommand { get; }
+    public RelayCommand SetStartupFilterCommand { get; }
+    public RelayCommand ToggleSingleStartupCommand { get; }
+    public RelayCommand LocateStartupFileCommand { get; }
+    public RelayCommand DeleteSingleStartupCommand { get; }
+    public RelayCommand DisableSelectedStartupsCommand { get; }
+    public RelayCommand EnableSelectedStartupsCommand { get; }
     public RelayCommand ClearLogCommand { get; }
 
     public MainViewModel()
@@ -206,6 +215,37 @@ public sealed class MainViewModel : ObservableObject
             async _ => await BatchSetContextMenusAsync(enable: true),
             _ => !IsGlobalBusy);
 
+        SetStartupFilterCommand = new RelayCommand(p =>
+        {
+            if (p is string filter)
+                StartupFilter = filter;
+        });
+
+        ToggleSingleStartupCommand = new RelayCommand(
+            async p => { if (p is StartupItemViewModel item) await ToggleSingleStartupAsync(item); },
+            _ => !IsGlobalBusy);
+
+        LocateStartupFileCommand = new RelayCommand(p =>
+        {
+            if (p is StartupItemViewModel item)
+            {
+                StartupItemManager.OpenFileLocation(item.Entry);
+                AppendLog($"已在资源管理器定位启动项文件：{item.Entry.ExecutablePath}");
+            }
+        });
+
+        DeleteSingleStartupCommand = new RelayCommand(
+            async p => { if (p is StartupItemViewModel item) await DeleteSingleStartupAsync(item); },
+            _ => !IsGlobalBusy);
+
+        DisableSelectedStartupsCommand = new RelayCommand(
+            async _ => await BatchSetStartupsAsync(enable: false),
+            _ => !IsGlobalBusy);
+
+        EnableSelectedStartupsCommand = new RelayCommand(
+            async _ => await BatchSetStartupsAsync(enable: true),
+            _ => !IsGlobalBusy);
+
         ClearLogCommand = new RelayCommand(_ =>
         {
             _logBuilder.Clear();
@@ -226,15 +266,31 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsTweaksView));
                 OnPropertyChanged(nameof(IsEnvView));
                 OnPropertyChanged(nameof(IsContextMenuView));
+                OnPropertyChanged(nameof(IsStartupView));
                 UpdateHeaders();
                 ApplyFilters();
             }
         }
     }
 
-    public bool IsTweaksView => !IsEnvView && !IsContextMenuView;
+    public bool IsTweaksView => !IsEnvView && !IsContextMenuView && !IsStartupView;
     public bool IsEnvView => SelectedNavKey.StartsWith("ENV_", StringComparison.Ordinal);
     public bool IsContextMenuView => SelectedNavKey == "CTX_MENU";
+    public bool IsStartupView => SelectedNavKey == "STARTUP_MGR";
+
+    public string StartupFilter
+    {
+        get => _startupFilter;
+        set
+        {
+            if (SetProperty(ref _startupFilter, value))
+                ApplyFilters();
+        }
+    }
+
+    public string FilterAllStartupsLabel => $"全部 ({_allStartupItems.Count})";
+    public string FilterEnabledStartupsLabel => $"开机自启 ({_allStartupItems.Count(x => x.IsStartupEnabled)})";
+    public string FilterDisabledStartupsLabel => $"已禁用 ({_allStartupItems.Count(x => !x.IsStartupEnabled)})";
 
     public string CtxScopeFilter
     {
@@ -313,13 +369,14 @@ public sealed class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        AppendLog("正在并行扫描系统优化项、开发环境与右键菜单项状态...");
+        AppendLog("正在并行扫描系统优化项、开发环境、右键菜单与开机启动项...");
         var tweakTasks = _allTweaks.Select(t => t.RefreshStatusAsync());
         var envTasks = _allEnvs.Select(e => e.RefreshStatusAsync());
         var ctxTask = ReloadContextMenusInternalAsync();
-        await Task.WhenAll(tweakTasks.Concat(envTasks).Append(ctxTask));
+        var startupTask = ReloadStartupItemsInternalAsync();
+        await Task.WhenAll(tweakTasks.Concat(envTasks).Append(ctxTask).Append(startupTask));
         ApplyFilters();
-        AppendLog($"全部状态扫描完毕（识别到 {_allContextMenus.Count} 个右键菜单项），可自由点击开关切换。");
+        AppendLog($"全部状态扫描完毕（右键可见项 {_allContextMenus.Count} 个，开机启动项 {_allStartupItems.Count} 个）。");
     }
 
     private async Task ReloadContextMenusInternalAsync()
@@ -327,6 +384,13 @@ public sealed class MainViewModel : ObservableObject
         var entries = await ContextMenuManager.ScanAllAsync();
         _allContextMenus.Clear();
         _allContextMenus.AddRange(entries.Select(e => new ContextMenuItemViewModel(e)));
+    }
+
+    private async Task ReloadStartupItemsInternalAsync()
+    {
+        var entries = await StartupItemManager.ScanAllAsync();
+        _allStartupItems.Clear();
+        _allStartupItems.AddRange(entries.Select(e => new StartupItemViewModel(e)));
     }
 
     private async Task RefreshCurrentViewAsync()
@@ -350,6 +414,11 @@ public sealed class MainViewModel : ObservableObject
                 AppendLog("正在重新扫描桌面、文件与文件夹右键菜单注册表项...");
                 await ReloadContextMenusInternalAsync();
             }
+            else if (IsStartupView)
+            {
+                AppendLog("正在重新扫描注册表 Run 与启动文件夹开机项...");
+                await ReloadStartupItemsInternalAsync();
+            }
             ApplyFilters();
             AppendLog("状态刷新完成。");
         }
@@ -369,8 +438,9 @@ public sealed class MainViewModel : ObservableObject
             "CAT_SECURITY" => ("安全与防火墙", "管理文件安全警告策略与系统网络防火墙状态"),
             "CAT_DESKTOP" => ("桌面、菜单与去遥测", "经典高效右键菜单、卸载小组件、关闭后台诊断遥测与联网搜索卡顿"),
             "CAT_UPDATE" => ("系统更新控制", "控制系统自动更新策略，一键长效暂停更新 100 年免打扰"),
-            "CTX_MENU" => ("右键菜单自定义管理", "无损隐藏或恢复桌面、文件、文件夹右键多余项目（大部分项目下一次右键即刻生效，无需删注册表）"),
-            "ENV_ALL" => ("开发环境与工具安装", "基于微软官方 winget 静默部署 Python、Node.js、Git、Go、Rust 等环境并自动配置 PATH"),
+            "CTX_MENU" => ("右键菜单自定义管理", "所见即所得无损隐藏或恢复桌面、文件、文件夹右键项目（绝大部分下一次右键即刻生效）"),
+            "STARTUP_MGR" => ("开机启动项管理", "与系统任务管理器 100% 同步：无损启用/禁用自启项、一键定位源文件与清理残留失效项"),
+            "ENV_ALL" => ("开发环境与工具安装", "基于微软官方 winget 静默部署本机必备 Python / Node.js / Git / .NET / VC++ 环境"),
             _ => ("全部系统与游戏优化", "")
         };
     }
@@ -400,6 +470,9 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(FilterAllEnvsLabel));
         OnPropertyChanged(nameof(FilterInstalledEnvsLabel));
         OnPropertyChanged(nameof(FilterUninstalledEnvsLabel));
+        OnPropertyChanged(nameof(FilterAllStartupsLabel));
+        OnPropertyChanged(nameof(FilterEnabledStartupsLabel));
+        OnPropertyChanged(nameof(FilterDisabledStartupsLabel));
     }
 
     private void ApplyFilters()
@@ -457,6 +530,24 @@ public sealed class MainViewModel : ObservableObject
                     !cm.FullRegistryPath.Contains(q, StringComparison.OrdinalIgnoreCase))
                     continue;
                 FilteredContextMenus.Add(cm);
+            }
+        }
+
+        FilteredStartupItems.Clear();
+        if (IsStartupView)
+        {
+            foreach (var st in _allStartupItems)
+            {
+                if (StartupFilter == "ENABLED" && !st.IsStartupEnabled)
+                    continue;
+                if (StartupFilter == "DISABLED" && st.IsStartupEnabled)
+                    continue;
+                if (!string.IsNullOrEmpty(q) &&
+                    !st.Name.Contains(q, StringComparison.OrdinalIgnoreCase) &&
+                    !st.Command.Contains(q, StringComparison.OrdinalIgnoreCase) &&
+                    !st.SourceLabel.Contains(q, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                FilteredStartupItems.Add(st);
             }
         }
     }
@@ -710,6 +801,88 @@ public sealed class MainViewModel : ObservableObject
             }
             AppendLog($"========== 批量右键管理完成：成功 {ok} / {selected.Count} 项 ==========");
             if (needRestart) ShowExplorerRestartBanner = true;
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+    }
+
+    private async Task ToggleSingleStartupAsync(StartupItemViewModel item)
+    {
+        IsGlobalBusy = true;
+        item.IsBusy = true;
+        try
+        {
+            bool targetEnable = !item.IsStartupEnabled;
+            var res = await StartupItemManager.SetEnabledAsync(item.Entry, targetEnable, AppendLog);
+            AppendLog(res.Success ? $"✔ {res.Message}" : $"✖ {res.Message}");
+            if (res.Success)
+            {
+                item.IsStartupEnabled = targetEnable;
+                ApplyFilters();
+            }
+        }
+        finally
+        {
+            item.IsBusy = false;
+            IsGlobalBusy = false;
+        }
+    }
+
+    private async Task DeleteSingleStartupAsync(StartupItemViewModel item)
+    {
+        var confirm = MessageBox.Show(
+            $"确定要永久删除开机启动项「{item.Name}」吗？\n\n命令：{item.Command}\n\n（如果只是暂时不想让它开机启动，点「否」直接关闭右侧开关即可无损禁用）",
+            "确认删除开机启动项",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        IsGlobalBusy = true;
+        try
+        {
+            var res = await StartupItemManager.DeleteEntryAsync(item.Entry, AppendLog);
+            AppendLog(res.Success ? $"✔ {res.Message}" : $"✖ {res.Message}");
+            if (res.Success)
+            {
+                _allStartupItems.Remove(item);
+                ApplyFilters();
+            }
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+    }
+
+    private async Task BatchSetStartupsAsync(bool enable)
+    {
+        var selected = FilteredStartupItems.Where(x => x.IsSelectedForBatch).ToList();
+        if (selected.Count == 0)
+        {
+            MessageBox.Show("请先勾选需要批量操作的开机启动项！", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        IsGlobalBusy = true;
+        int ok = 0;
+        try
+        {
+            AppendLog($"========== 开始批量{(enable ? "启用" : "禁用")}开机启动项（共 {selected.Count} 项） ==========");
+            foreach (var item in selected)
+            {
+                var res = await StartupItemManager.SetEnabledAsync(item.Entry, enable, AppendLog);
+                AppendLog(res.Success ? $"  ✔ {res.Message}" : $"  ✖ {res.Message}");
+                if (res.Success)
+                {
+                    item.IsStartupEnabled = enable;
+                    item.IsSelectedForBatch = false;
+                    ok++;
+                }
+            }
+            AppendLog($"========== 批量启动项管理完成：成功 {ok} / {selected.Count} 项 ==========");
+            ApplyFilters();
         }
         finally
         {

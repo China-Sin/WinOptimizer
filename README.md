@@ -62,7 +62,11 @@
 - 自动扫描 **桌面空白处、文件 (*)、文件夹、驱动器** 全部 `shell` 命令与 `shellex\ContextMenuHandlers` 扩展项，支持中文资源名解析（如 PeaZip、Git GUI/Bash、NVIDIA App/控制面板、便捷设置等）。
 - **无损隐藏 / 恢复**：通过 Windows 原生 `LegacyDisable` 与 `ShellEx` 屏蔽机制一键开关，不删除原注册表结构，绝大部分项目下一次右键即刻生效；第三方残留项同时提供带二次确认的彻底删除功能。
 
-### 七、侧边栏内置快捷工具
+### 七、开机启动项管理（Startup Manager）
+- 扫描当前用户/系统全局 64 位与 32 位 `Run` 注册表及用户/公共启动文件夹，通过原生 `StartupApproved` 12 字节状态与 **Windows 任务管理器「启动应用」100% 同步**。
+- 自动高亮标记目标 `.exe` 已不存在的失效残留项，支持单项/批量无损启用禁用、一键定位源文件及彻底删除清理。
+
+### 八、侧边栏内置快捷工具
 - **秒清备用内存 (ISLC)**：调用原生 `NtSetSystemInformation` 秒清 Windows Standby List 缓存内存。
 - **清理旧着色器缓存**：安全清理 `DXCache` / `GLCache` / `D3DSCache` 过期文件。
 - **一键重启资源管理器**。

@@ -187,3 +187,51 @@ public sealed class ContextMenuItemViewModel : ObservableObject
 
     public string StatusBadgeText => IsMenuEnabled ? "已显示" : "已隐藏";
 }
+
+public sealed class StartupItemViewModel : ObservableObject
+{
+    public StartupEntry Entry { get; }
+
+    private bool _isSelectedForBatch;
+    private bool _isStartupEnabled;
+    private bool _isBusy;
+
+    public StartupItemViewModel(StartupEntry entry)
+    {
+        Entry = entry;
+        _isStartupEnabled = entry.IsEnabled;
+    }
+
+    public string Name => Entry.Name;
+    public string Command => Entry.Command;
+    public string SourceLabel => Entry.SourceLabel;
+    public bool TargetFileMissing => !Entry.TargetFileExists;
+    public bool CanLocate => Entry.TargetFileExists || !string.IsNullOrWhiteSpace(Entry.ExecutablePath);
+
+    public bool IsSelectedForBatch
+    {
+        get => _isSelectedForBatch;
+        set => SetProperty(ref _isSelectedForBatch, value);
+    }
+
+    public bool IsStartupEnabled
+    {
+        get => _isStartupEnabled;
+        set
+        {
+            if (SetProperty(ref _isStartupEnabled, value))
+            {
+                Entry.IsEnabled = value;
+                OnPropertyChanged(nameof(StatusBadgeText));
+            }
+        }
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set => SetProperty(ref _isBusy, value);
+    }
+
+    public string StatusBadgeText => IsStartupEnabled ? "开机自启" : "已禁用";
+}
