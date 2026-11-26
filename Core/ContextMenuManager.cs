@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
@@ -29,9 +30,9 @@ public sealed class ContextMenuEntry
 }
 
 /// <summary>
-/// Windows 右键菜单（桌面空白处 / 文件 / 文件夹 / 驱动器）扫描与无损隐藏/恢复管理器。
-/// - Shell 命令项：通过写入/移除 Windows 原生 LegacyDisable 值实现零破坏即时隐藏与恢复；
-/// - ShellEx 扩展项：优先通过 CLSID 前缀 '-' 实现按场景精确禁用，遇系统权限保护时自动回退至 HKCU Shell Extensions\Blocked。
+/// Windows 右键菜单（桌面空白处 / 文件 / 文件夹 / 驱动器）所见即所得扫描与无损隐藏/恢复管理器。
+/// 自动过滤 Extended (Shift+右键项)、HideBasedOnVelocityId (系统屏蔽项)、AppliesTo (特定目录条件项)、
+/// 孤立失效 DLL 及 OneDrive/系统内部占位扩展，只展示平时普通右键真正可见的项目。
 /// </summary>
 public static class ContextMenuManager
 {
@@ -42,17 +43,32 @@ public static class ContextMenuManager
         "New", "Display", "Personalize", "open", "explore", "find", "copyaspath", "Properties"
     };
 
+    /// <summary>
+    /// 系统内部隐藏占位或仅在特殊目录（如 OneDrive 同步目录 / 脱机文件 / 贴纸）才触发的条件型项，普通右键不可见
+    /// </summary>
+    private static readonly HashSet<string> HiddenInternalKeyNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "EditStickers", "FileSyncEx", "WorkFolders", "Offline Files", "EncryptionContextMenuHandler",
+        "Library Location", "PlayTo", "Open Containing Folder Menu", "UpdateEncryptionSettings",
+        "UpdateEncryptionSettingsWork", "Sharing", "ModernSharing", "PintoStartScreen", "bvshell"
+    };
+
+    private static readonly HashSet<string> HiddenInternalClsids = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "{CB3D0F55-BC2C-4C1A-85ED-23ED75B5106B}", // OneDrive FileSyncEx
+        "{596AB062-B4D2-4215-9F74-E9109B0A8153}", // Previous Versions
+        "{F81E9010-6EA4-11CE-A7FF-00AA003CA9F6}", // Sharing
+        "{90AA3A4E-1CBA-4233-B8BB-535773D48449}", // TaskbarPin
+        "{A2A9545D-A0C2-42B4-9708-A0B2BADD77C8}"  // StartMenuPin
+    };
+
     private static readonly Dictionary<string, string> FriendlyHandlerNames = new(StringComparer.OrdinalIgnoreCase)
     {
         ["NvAppDesktopContext"] = "NVIDIA App",
         ["NvCplDesktopContext"] = "NVIDIA 控制面板",
-        ["New"] = "新建 (New)",
-        ["WorkFolders"] = "工作文件夹",
-        ["Sharing"] = "授予访问权限 / 共享",
+        ["New"] = "新建 (W)",
         ["EPP"] = "Microsoft Defender 扫描",
-        ["ModernSharing"] = "共享 (Modern Sharing)",
         ["Open With"] = "打开方式",
-        ["CopyAsPathMenu"] = "复制文件地址",
         ["7-Zip"] = "7-Zip 压缩菜单",
         ["WinRAR"] = "WinRAR 压缩菜单",
         ["WinRAR32"] = "WinRAR 压缩菜单",
@@ -106,6 +122,7 @@ public static class ContextMenuManager
         return Task.Run(() =>
         {
             var results = new List<ContextMenuEntry>();
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var blockedClsids = LoadBlockedClsids();
 
             foreach (var target in ScanTargets)
@@ -118,8 +135,10 @@ public static class ContextMenuManager
 
                     foreach (var subName in rootKey.GetSubKeyNames())
                     {
-                        // 忽略内部占位键（如 .SpotlightLearnMore 这种系统私有隐藏键或纯空格分隔符）
-                        if (subName.StartsWith('.') || string.IsNullOrWhiteSpace(subName))
+                        string trimmedName = subName.Trim();
+                        if (string.IsNullOrEmpty(trimmedName) || trimmedName.StartsWith('.'))
+                            continue;
+                        if (HiddenInternalKeyNames.Contains(trimmedName))
                             continue;
 
                         using var itemKey = rootKey.OpenSubKey(subName, writable: false);
@@ -130,12 +149,32 @@ public static class ContextMenuManager
 
                         if (target.Kind == ContextMenuKind.ShellVerb)
                         {
-                            // 跳过仅靠程序内部调用、常规右键根本不显示的隐藏项（无可见命令或标记为仅编程访问）
-                            if (itemKey.GetValue("ProgrammaticAccessOnly") != null)
+                            // 过滤平时普通右键不会显示的隐藏项：
+                            // 1. Extended (仅按住 Shift + 右键才显示)
+                            // 2. ProgrammaticAccessOnly (仅程序内部调用)
+                            // 3. HideBasedOnVelocityId (被 Windows 新版本功能开关隐藏)
+                            // 4. AppliesTo (仅匹配特定文件路径/条件才显示)
+                            if (itemKey.GetValue("Extended") != null ||
+                                itemKey.GetValue("ProgrammaticAccessOnly") != null ||
+                                itemKey.GetValue("HideBasedOnVelocityId") != null ||
+                                itemKey.GetValue("AppliesTo") != null)
+                                continue;
+
+                            // 必须具备真实命令子键或二级子菜单，且具备可显示名称
+                            bool hasCommand = itemKey.OpenSubKey("command") != null ||
+                                              itemKey.GetValue("SubCommands") != null ||
+                                              itemKey.OpenSubKey("shell") != null;
+                            bool hasCaption = !string.IsNullOrWhiteSpace(itemKey.GetValue("MUIVerb")?.ToString()) ||
+                                              !string.IsNullOrWhiteSpace(itemKey.GetValue(null)?.ToString());
+                            if (!hasCommand && !hasCaption)
                                 continue;
 
                             bool hasLegacyDisable = itemKey.GetValue("LegacyDisable") != null;
-                            string displayName = ResolveShellVerbDisplayName(itemKey, subName);
+                            string displayName = ResolveShellVerbDisplayName(itemKey, trimmedName);
+
+                            string dedupeKey = $"{target.ScopeKey}|SHELL|{displayName}";
+                            if (!seenKeys.Add(dedupeKey))
+                                continue;
 
                             results.Add(new ContextMenuEntry
                             {
@@ -148,21 +187,30 @@ public static class ContextMenuManager
                                 Hive = target.Hive,
                                 SubKeyPath = fullSubPath,
                                 IsEnabled = !hasLegacyDisable,
-                                IsProtectedSystemItem = ProtectedSystemKeys.Contains(subName)
+                                IsProtectedSystemItem = ProtectedSystemKeys.Contains(trimmedName)
                             });
                         }
                         else
                         {
                             string rawDefault = itemKey.GetValue(null)?.ToString()?.Trim() ?? string.Empty;
-                            // 有些 ShellEx 键名本身就是 CLSID，或者默认值是 CLSID
-                            string rawClsid = rawDefault.Contains('{') ? rawDefault : (subName.Contains('{') ? subName : string.Empty);
+                            string rawClsid = rawDefault.Contains('{') ? rawDefault : (trimmedName.Contains('{') ? trimmedName : string.Empty);
                             if (string.IsNullOrEmpty(rawClsid)) continue;
 
                             bool prefixedDisabled = rawClsid.StartsWith('-');
                             string cleanClsid = prefixedDisabled ? rawClsid[1..].Trim() : rawClsid;
-                            bool blockedInPolicy = blockedClsids.Contains(cleanClsid);
+                            if (HiddenInternalClsids.Contains(cleanClsid))
+                                continue;
 
-                            string displayName = ResolveShellExDisplayName(subName, cleanClsid);
+                            // 验证对应的 ShellEx COM 组件 DLL 真实存在（过滤已卸载软件的死残留空壳）
+                            if (!DoesClsidServerExist(cleanClsid))
+                                continue;
+
+                            bool blockedInPolicy = blockedClsids.Contains(cleanClsid);
+                            string displayName = ResolveShellExDisplayName(trimmedName, cleanClsid);
+
+                            string dedupeKey = $"{target.ScopeKey}|EX|{cleanClsid}";
+                            if (!seenKeys.Add(dedupeKey))
+                                continue;
 
                             results.Add(new ContextMenuEntry
                             {
@@ -176,7 +224,7 @@ public static class ContextMenuManager
                                 SubKeyPath = fullSubPath,
                                 Clsid = cleanClsid,
                                 IsEnabled = !prefixedDisabled && !blockedInPolicy,
-                                IsProtectedSystemItem = ProtectedSystemKeys.Contains(subName)
+                                IsProtectedSystemItem = ProtectedSystemKeys.Contains(trimmedName)
                             });
                         }
                     }
@@ -189,7 +237,7 @@ public static class ContextMenuManager
 
             return results
                 .OrderBy(x => x.ScopeKey switch { "DESKTOP" => 0, "FILE" => 1, "FOLDER" => 2, _ => 3 })
-                .ThenBy(x => x.IsEnabled ? 0 : 1)
+                .ThenBy(x => x.IsProtectedSystemItem ? 1 : 0) // 第三方软件排在前面，方便第一时间关掉！
                 .ThenBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
         });
@@ -235,12 +283,12 @@ public static class ContextMenuManager
                         }
                         catch
                         {
-                            // ignore if key is read-only; unblock via HKCU Blocked below
+                            // ignore read-only; unblock via HKCU Blocked below
                         }
 
                         SystemHelper.DeleteRegistryValue(RegistryHive.CurrentUser, BlockedShellExPath, entry.Clsid);
                         entry.IsEnabled = true;
-                        return new TweakResult(true, $"已恢复显示右键扩展「{entry.DisplayName}」。", RecommendExplorerRestart: false);
+                        return new TweakResult(true, $"已恢复显示右键扩展「{entry.DisplayName}」。");
                     }
                     else
                     {
@@ -303,6 +351,24 @@ public static class ContextMenuManager
                 return new TweakResult(false, $"删除失败（可能受系统权限保护，建议改用左侧开关隐藏）：{ex.Message}");
             }
         });
+    }
+
+    private static bool DoesClsidServerExist(string clsid)
+    {
+        string? dllPath =
+            SystemHelper.GetRegistryValue(RegistryHive.LocalMachine, $@"SOFTWARE\Classes\CLSID\{clsid}\InprocServer32", null)?.ToString()
+            ?? SystemHelper.GetRegistryValue(RegistryHive.CurrentUser, $@"Software\Classes\CLSID\{clsid}\InprocServer32", null)?.ToString()
+            ?? SystemHelper.GetRegistryValue(RegistryHive.ClassesRoot, $@"CLSID\{clsid}\InprocServer32", null)?.ToString();
+
+        if (string.IsNullOrWhiteSpace(dllPath))
+            return false;
+
+        string expanded = Environment.ExpandEnvironmentVariables(dllPath.Trim().Trim('"'));
+        // 系统相对路径 DLL（如 shell32.dll）默认存在
+        if (!expanded.Contains('\\'))
+            return true;
+
+        return File.Exists(expanded);
     }
 
     private static HashSet<string> LoadBlockedClsids()
