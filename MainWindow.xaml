@@ -754,24 +754,24 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- 路径输入与浏览/拖拽区 -->
+                    <!-- 路径输入与浏览/拖拽区（右侧按钮固定靠右，长路径绝不挤出屏幕） -->
                     <Border Grid.Row="0" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,0,0,10">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                        <DockPanel LastChildFill="True">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding BrowseLockFileCommand}" Content="选择文件" Margin="0,0,8,0" Height="34" />
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding BrowseLockFolderCommand}" Content="选择文件夹" Margin="0,0,8,0" Height="34" />
+                                <Button Style="{StaticResource PrimaryBtn}" Command="{Binding ScanFileLocksCommand}" Content="扫描占用" Height="34" Padding="16,0" />
+                            </StackPanel>
 
-                            <Border Grid.Column="0" Background="#11151E" BorderBrush="#333C52" BorderThickness="1" CornerRadius="6" Padding="10,0" Height="34" Margin="0,0,10,0">
-                                <Grid>
+                            <Border Background="#11151E" BorderBrush="#333C52" BorderThickness="1" CornerRadius="6" Padding="10,0" Height="34" MinWidth="120">
+                                <Grid ClipToBounds="True">
                                     <TextBox Text="{Binding FileLockTargetPath, UpdateSourceTrigger=PropertyChanged}"
                                              Background="Transparent" BorderThickness="0" Foreground="White" CaretBrush="White"
-                                             VerticalContentAlignment="Center" FontFamily="Consolas, Microsoft YaHei UI" FontSize="12.5"
+                                             VerticalContentAlignment="Center" HorizontalScrollBarVisibility="Hidden"
+                                             FontFamily="Consolas, Microsoft YaHei UI" FontSize="12.5"
                                              KeyDown="FileLockPathBox_KeyDown" />
                                     <TextBlock Text="拖入文件 / 文件夹，或粘贴路径（如 &quot;D:\adobe\...\AdobeGrowthSDK.dll&quot;）后回车..."
-                                               Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center" IsHitTestVisible="False">
+                                               Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -785,11 +785,7 @@
                                     </TextBlock>
                                 </Grid>
                             </Border>
-
-                            <Button Grid.Column="1" Style="{StaticResource SecondaryBtn}" Command="{Binding BrowseLockFileCommand}" Content="选择文件" Margin="0,0,8,0" Height="34" />
-                            <Button Grid.Column="2" Style="{StaticResource SecondaryBtn}" Command="{Binding BrowseLockFolderCommand}" Content="选择文件夹" Margin="0,0,8,0" Height="34" />
-                            <Button Grid.Column="3" Style="{StaticResource PrimaryBtn}" Command="{Binding ScanFileLocksCommand}" Content="扫描占用" Height="34" Padding="16,0" />
-                        </Grid>
+                        </DockPanel>
                     </Border>
 
                     <!-- 扫描状态摘要 -->

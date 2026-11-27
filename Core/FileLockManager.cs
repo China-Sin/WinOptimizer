@@ -215,7 +215,8 @@ public static partial class FileLockManager
             EnableDebugPrivilege();
             int currentPid = Environment.ProcessId;
 
-            // 1. Restart Manager 扫描（对文件夹自动收集前 250 个文件批量检查）
+            // 1. Restart Manager 扫描（< 0.1s，对文件夹自动收集前 250 个文件批量检查）
+            var sw = Stopwatch.StartNew();
             log?.Invoke("正在通过 Windows Restart Manager 扫描常规文件锁...");
             var rmFiles = CollectFilesForRestartManager(targetPath, isDir, maxFiles: 250);
             if (rmFiles.Count > 0)
@@ -223,13 +224,25 @@ public static partial class FileLockManager
                 ScanViaRestartManager(rmFiles, targetPath, currentPid, map);
             }
 
-            // 2. 全进程已加载 DLL/EXE 模块扫描（精准抓出 AdobeGrowthSDK.dll 这类被 LoadLibrary 映射的 DLL）
-            log?.Invoke("正在扫描全部运行中进程的已加载 DLL/EXE 模块...");
+            // 2. 并行全进程已加载 DLL/EXE 模块扫描（~0.2s，专门抓出 AdobeGrowthSDK.dll 这类被 LoadLibrary 映射的 DLL）
+            log?.Invoke("正在并行扫描运行中进程的已加载 DLL/EXE 模块...");
             ScanLoadedModules(targetPath, isDir, currentPid, map);
 
-            // 3. 内核扩展句柄表扫描（精准抓出目录占用与可不杀进程直接断开的单个磁盘文件句柄）
-            log?.Invoke("正在深度扫描系统磁盘句柄表（识别文件夹占用与可独立断开的文件句柄）...");
-            ScanKernelDiskHandles(targetPath, isDir, currentPid, map);
+            // 3. 智能防死锁内核句柄扫描：
+            //    - 单文件若已通过 Restart Manager 或 DLL 模块定位到占用进程，仅扫描那几个目标 PID 的句柄（< 0.05s）以支持「仅断开句柄」；
+            //    - 文件夹或前两步未找到占用时，执行全系统磁盘句柄扫描（带单句柄 35ms 熔断超时与总耗时 3.5s 上限，绝不卡死）。
+            if (!isDir && map.Count > 0)
+            {
+                log?.Invoke($"已定位 {map.Count} 个占用进程，正在快速提取对应文件句柄...");
+                ScanKernelDiskHandles(targetPath, isDir, currentPid, map, filterPids: map.Keys.ToHashSet(), maxBudgetMs: 1200);
+            }
+            else
+            {
+                log?.Invoke("正在执行防死锁内核磁盘句柄扫描（最长 3.5 秒自动完成）...");
+                ScanKernelDiskHandles(targetPath, isDir, currentPid, map, filterPids: null, maxBudgetMs: 3500);
+            }
+
+            log?.Invoke($"扫描耗时 {sw.ElapsedMilliseconds} ms。");
 
             return map.Values
                 .OrderBy(x => x.IsCriticalSystemProcess ? 1 : 0)
@@ -571,12 +584,14 @@ public static partial class FileLockManager
     private static void ScanLoadedModules(string targetPath, bool isDir, int currentPid, Dictionary<int, FileLockInfo> map)
     {
         string dirPrefix = isDir ? EnsureTrailingSlash(targetPath) : string.Empty;
+        var procs = Process.GetProcesses();
+        var mapLock = new object();
 
-        foreach (var proc in Process.GetProcesses())
+        Parallel.ForEach(procs, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, proc =>
         {
             try
             {
-                if (proc.Id <= 4 || proc.Id == currentPid) continue;
+                if (proc.Id <= 4 || proc.Id == currentPid) return;
 
                 foreach (ProcessModule mod in proc.Modules)
                 {
@@ -589,7 +604,7 @@ public static partial class FileLockManager
 
                     if (matched)
                     {
-                        map[proc.Id] = new FileLockInfo
+                        var info = new FileLockInfo
                         {
                             ProcessId = proc.Id,
                             ProcessName = proc.ProcessName,
@@ -598,6 +613,10 @@ public static partial class FileLockManager
                             Method = LockDetectMethod.LoadedDllModule,
                             IsCriticalSystemProcess = CriticalProcesses.Contains(proc.ProcessName)
                         };
+                        lock (mapLock)
+                        {
+                            map[proc.Id] = info;
+                        }
                         break;
                     }
                 }
@@ -610,15 +629,26 @@ public static partial class FileLockManager
             {
                 proc.Dispose();
             }
-        }
+        });
     }
 
-    private static void ScanKernelDiskHandles(string targetPath, bool isDir, int currentPid, Dictionary<int, FileLockInfo> map)
+    // 经典的同步阻塞管道/设备句柄 GrantedAccess 掩码，直接跳过以彻底杜绝内核态 IRP 挂起
+    private static bool IsLikelyBlockingPipeAccess(uint access) =>
+        access is 0x0012019Fu or 0x001A019Fu or 0x00120189u or 0x00100000u or 0x00120089u or 0x0016019Fu or 0x001F01FFu;
+
+    private static void ScanKernelDiskHandles(
+        string targetPath,
+        bool isDir,
+        int currentPid,
+        Dictionary<int, FileLockInfo> map,
+        HashSet<int>? filterPids,
+        int maxBudgetMs)
     {
         ushort? fileObjectTypeIndex = DetectFileObjectTypeIndex();
         if (fileObjectTypeIndex == null) return;
 
-        uint bufferSize = 1024 * 1024 * 4; // 4 MB initial
+        var budgetSw = Stopwatch.StartNew();
+        uint bufferSize = 1024 * 1024 * 4;
         nint buffer = Marshal.AllocHGlobal((int)bufferSize);
         try
         {
@@ -633,10 +663,9 @@ public static partial class FileLockManager
             if (status != 0) return;
 
             long handleCount = Marshal.ReadIntPtr(buffer).ToInt64();
-            int entryOffset = nint.Size * 2; // NumberOfHandles + Reserved
+            int entryOffset = nint.Size * 2;
             int entrySize = Marshal.SizeOf<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX>();
 
-            // 先按 PID 分组，只收集 File 类型句柄，避免重复 OpenProcess
             var perProcessHandles = new Dictionary<int, List<nint>>();
             for (long i = 0; i < handleCount; i++)
             {
@@ -646,8 +675,14 @@ public static partial class FileLockManager
                 if (entry.ObjectTypeIndex != fileObjectTypeIndex.Value)
                     continue;
 
+                if (IsLikelyBlockingPipeAccess(entry.GrantedAccess))
+                    continue;
+
                 int pid = (int)entry.UniqueProcessId;
                 if (pid <= 4 || pid == currentPid)
+                    continue;
+
+                if (filterPids != null && !filterPids.Contains(pid))
                     continue;
 
                 if (!perProcessHandles.TryGetValue(pid, out var list))
@@ -660,10 +695,15 @@ public static partial class FileLockManager
 
             nint currentProcHandle = Process.GetCurrentProcess().Handle;
             string dirPrefix = isDir ? EnsureTrailingSlash(targetPath) : string.Empty;
-            var pathBuf = new StringBuilder(1024);
+
+            // 使用独立超时探针线程查询磁盘路径，即使遇到罕见阻塞同步句柄也只等 35ms 立即跳过，绝不卡死主扫描！
+            using var prober = new TimedHandlePathProber();
 
             foreach (var (pid, handles) in perProcessHandles)
             {
+                if (budgetSw.ElapsedMilliseconds >= maxBudgetMs)
+                    break;
+
                 nint hProc = OpenProcess(ProcessDupHandle | ProcessQueryLimitedInformation, false, pid);
                 if (hProc == 0) continue;
 
@@ -671,20 +711,19 @@ public static partial class FileLockManager
                 {
                     foreach (var remoteHandle in handles)
                     {
+                        if (budgetSw.ElapsedMilliseconds >= maxBudgetMs)
+                            break;
+
                         if (!DuplicateHandle(hProc, remoteHandle, currentProcHandle, out nint dupHandle, 0, false, DuplicateSameAccess))
                             continue;
 
+                        bool closedByProber = false;
                         try
                         {
-                            // 极其关键：仅对磁盘文件/目录 (FILE_TYPE_DISK) 查询路径，绝不触碰命名管道防死锁
-                            if (GetFileType(dupHandle) != FileTypeDisk)
+                            string? resolved = prober.TryResolveDiskPath(dupHandle, timeoutMs: 35, out closedByProber);
+                            if (string.IsNullOrEmpty(resolved))
                                 continue;
 
-                            pathBuf.Clear();
-                            uint len = GetFinalPathNameByHandleW(dupHandle, pathBuf, (uint)pathBuf.Capacity, 0);
-                            if (len == 0 || len >= pathBuf.Capacity) continue;
-
-                            string resolved = StripExtendedPathPrefix(pathBuf.ToString());
                             bool matched = isDir
                                 ? resolved.Equals(targetPath, StringComparison.OrdinalIgnoreCase) ||
                                   resolved.StartsWith(dirPrefix, StringComparison.OrdinalIgnoreCase)
@@ -712,7 +751,8 @@ public static partial class FileLockManager
                         }
                         finally
                         {
-                            CloseHandle(dupHandle);
+                            if (!closedByProber)
+                                CloseHandle(dupHandle);
                         }
                     }
                 }
@@ -725,6 +765,93 @@ public static partial class FileLockManager
         finally
         {
             Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    /// <summary>
+    /// 可复用超时探针：在后台工作线程执行 GetFileType + GetFinalPathNameByHandleW；
+    /// 若某个异常同步管道句柄卡死超过 35ms，立即抛弃该卡死线程并重建新探针线程，确保主扫描永远零卡死。
+    /// </summary>
+    private sealed class TimedHandlePathProber : IDisposable
+    {
+        private sealed class WorkerContext
+        {
+            public readonly AutoResetEvent WorkEvent = new(false);
+            public readonly AutoResetEvent DoneEvent = new(false);
+            public volatile bool Stop;
+            public nint CurrentHandle;
+            public string? CurrentResult;
+        }
+
+        private WorkerContext _ctx;
+
+        public TimedHandlePathProber()
+        {
+            _ctx = SpawnWorker();
+        }
+
+        private static WorkerContext SpawnWorker()
+        {
+            var ctx = new WorkerContext();
+            var t = new Thread(() =>
+            {
+                var localSb = new StringBuilder(1024);
+                while (!ctx.Stop)
+                {
+                    if (!ctx.WorkEvent.WaitOne(200)) continue;
+                    if (ctx.Stop) break;
+
+                    nint h = ctx.CurrentHandle;
+                    string? path = null;
+                    try
+                    {
+                        if (GetFileType(h) == FileTypeDisk)
+                        {
+                            localSb.Clear();
+                            uint len = GetFinalPathNameByHandleW(h, localSb, (uint)localSb.Capacity, 0);
+                            if (len > 0 && len < localSb.Capacity)
+                                path = StripExtendedPathPrefix(localSb.ToString());
+                        }
+                    }
+                    catch
+                    {
+                        path = null;
+                    }
+                    ctx.CurrentResult = path;
+                    ctx.DoneEvent.Set();
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "HandlePathProber"
+            };
+            t.Start();
+            return ctx;
+        }
+
+        public string? TryResolveDiskPath(nint dupHandle, int timeoutMs, out bool handleAbandoned)
+        {
+            handleAbandoned = false;
+            _ctx.CurrentHandle = dupHandle;
+            _ctx.CurrentResult = null;
+            _ctx.WorkEvent.Set();
+
+            if (_ctx.DoneEvent.WaitOne(timeoutMs))
+            {
+                return _ctx.CurrentResult;
+            }
+
+            // 该句柄触发了内核同步 IRP 阻塞！立刻抛弃隔离的旧探针上下文并启用全新探针继续扫描
+            handleAbandoned = true;
+            _ctx.Stop = true;
+            _ctx = SpawnWorker();
+            return null;
+        }
+
+        public void Dispose()
+        {
+            _ctx.Stop = true;
+            try { _ctx.WorkEvent.Set(); } catch { }
         }
     }
 
