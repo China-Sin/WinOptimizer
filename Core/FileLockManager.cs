@@ -854,4 +854,6 @@ public static partial class FileLockManager
             // ignore
         }
     }
+
+    #endregion
 }
