@@ -8,10 +8,10 @@
 
 ## 下载与使用
 
-前往右侧 **[Releases](../../releases)** 页面直接下载最新编译好的单文件可执行程序（内置 UAC 管理员提权，双击即用）：
+前往右侧 **[Releases](../../releases/latest)** 页面直接下载最新自动构建的单文件可执行程序（内置 UAC 管理员提权，双击即用；每次提交至 `main` 分支均由 GitHub Actions 自动同步最新成品）：
 
-- **`WinOptimizer-v1.0.0-win-x64-standalone.exe`（推荐）**：完整免环境独立单文件版，自带 .NET 8 运行时，新装纯净版 Windows 亦可直接运行。
-- **`WinOptimizer-v1.0.0-win-x64-lite.exe`**：极速轻量版（< 400 KB），适用于已安装 .NET 8 Desktop Runtime 的电脑。
+- **`*-win-x64-standalone.exe`（推荐）**：完整免环境独立单文件版，自带 .NET 8 运行时，新装纯净版 Windows 亦可直接运行。
+- **`*-win-x64-lite.exe`**：极速轻量版（< 500 KB），适用于已安装 .NET 8 Desktop Runtime 的电脑。
 
 ---
 

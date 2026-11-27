@@ -26,7 +26,7 @@
                         </Border>
                         <StackPanel>
                             <TextBlock Text="WinOptimizer" FontSize="16" FontWeight="Bold" Foreground="White" />
-                            <TextBlock Text="模块化一键优化中心 v1.0" FontSize="11" Foreground="{StaticResource TextMuted}" />
+                            <TextBlock Text="模块化一键优化中心 v1.1" FontSize="11" Foreground="{StaticResource TextMuted}" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
