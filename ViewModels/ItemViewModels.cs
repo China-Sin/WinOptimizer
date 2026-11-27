@@ -239,3 +239,25 @@ public sealed class StartupItemViewModel : ObservableObject
 
     public string StatusBadgeText => IsStartupEnabled ? "开机自启" : "已禁用";
 }
+
+public sealed class FileLockItemViewModel : ObservableObject
+{
+    public FileLockInfo Info { get; }
+
+    public FileLockItemViewModel(FileLockInfo info)
+    {
+        Info = info;
+    }
+
+    public int ProcessId => Info.ProcessId;
+    public string ProcessHeader => $"{Info.ProcessName}  (PID: {Info.ProcessId})";
+    public string ProcessPath => string.IsNullOrWhiteSpace(Info.ProcessPath) ? "（受保护的系统进程，无法读取路径）" : Info.ProcessPath;
+    public string LockedTargetPath => $"占用目标：{Info.LockedTargetPath}";
+    public string MethodBadge => Info.MethodBadge;
+    public bool CanCloseHandleOnly => Info.CanCloseHandleOnly;
+    public bool IsExplorer => Info.IsExplorer;
+    public bool IsCritical => Info.IsCriticalSystemProcess;
+    public bool CanKillProcess => !Info.IsCriticalSystemProcess;
+    public bool CanLocateProcess => !string.IsNullOrWhiteSpace(Info.ProcessPath);
+    public string KillButtonText => Info.IsExplorer ? "重启资源管理器" : "结束进程";
+}

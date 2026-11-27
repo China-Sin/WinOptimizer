@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Windows;
+using Microsoft.Win32;
 using WinOptimizer.Core;
 using WinOptimizer.Tweaks;
 
@@ -28,11 +30,15 @@ public sealed class MainViewModel : ObservableObject
     private string _logText = string.Empty;
     private string _pageHeaderTitle = "全部系统与游戏优化";
     private string _pageHeaderSubtitle = "实时检测系统当前状态，支持单项开关切换与一键批量优化 / 恢复默认";
+    private string _fileLockTargetPath = string.Empty;
+    private string _fileLockSummaryText = "将无法删除的文件或文件夹拖入窗口，或点击上方「选择文件 / 选择文件夹」扫描占用进程。";
+    private bool _isRightClickUnlockIntegrated;
 
     public ObservableCollection<TweakItemViewModel> FilteredTweaks { get; } = [];
     public ObservableCollection<EnvItemViewModel> FilteredEnvs { get; } = [];
     public ObservableCollection<ContextMenuItemViewModel> FilteredContextMenus { get; } = [];
     public ObservableCollection<StartupItemViewModel> FilteredStartupItems { get; } = [];
+    public ObservableCollection<FileLockItemViewModel> FileLocks { get; } = [];
 
     public string OsSummary { get; }
     public bool IsAdmin { get; }
@@ -67,6 +73,16 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand DeleteSingleStartupCommand { get; }
     public RelayCommand DisableSelectedStartupsCommand { get; }
     public RelayCommand EnableSelectedStartupsCommand { get; }
+    public RelayCommand BrowseLockFileCommand { get; }
+    public RelayCommand BrowseLockFolderCommand { get; }
+    public RelayCommand ScanFileLocksCommand { get; }
+    public RelayCommand UnlockAllLocksCommand { get; }
+    public RelayCommand UnlockAndDeleteTargetCommand { get; }
+    public RelayCommand ScheduleDeleteOnRebootCommand { get; }
+    public RelayCommand CloseSingleHandleCommand { get; }
+    public RelayCommand KillSingleLockProcessCommand { get; }
+    public RelayCommand LocateLockProcessCommand { get; }
+    public RelayCommand ToggleUnlockRightClickMenuCommand { get; }
     public RelayCommand ClearLogCommand { get; }
 
     public MainViewModel()
@@ -278,12 +294,87 @@ public sealed class MainViewModel : ObservableObject
             async _ => await BatchSetStartupsAsync(enable: true),
             _ => !IsGlobalBusy);
 
+        BrowseLockFileCommand = new RelayCommand(_ =>
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "选择需要解除占用的文件",
+                Filter = "所有文件 (*.*)|*.*",
+                CheckFileExists = true
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                FileLockTargetPath = dlg.FileName;
+                _ = ScanFileLocksAsync();
+            }
+        });
+
+        BrowseLockFolderCommand = new RelayCommand(_ =>
+        {
+            var dlg = new OpenFolderDialog
+            {
+                Title = "选择需要解除占用的文件夹"
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                FileLockTargetPath = dlg.FolderName;
+                _ = ScanFileLocksAsync();
+            }
+        });
+
+        ScanFileLocksCommand = new RelayCommand(
+            async _ => await ScanFileLocksAsync(),
+            _ => !IsGlobalBusy);
+
+        UnlockAllLocksCommand = new RelayCommand(
+            async _ => await UnlockAllLocksAsync(),
+            _ => !IsGlobalBusy);
+
+        UnlockAndDeleteTargetCommand = new RelayCommand(
+            async _ => await UnlockAndForceDeleteAsync(),
+            _ => !IsGlobalBusy);
+
+        ScheduleDeleteOnRebootCommand = new RelayCommand(
+            async _ => await ScheduleDeleteOnRebootAsync(),
+            _ => !IsGlobalBusy);
+
+        CloseSingleHandleCommand = new RelayCommand(
+            async p => { if (p is FileLockItemViewModel item) await CloseSingleLockHandleAsync(item); },
+            _ => !IsGlobalBusy);
+
+        KillSingleLockProcessCommand = new RelayCommand(
+            async p => { if (p is FileLockItemViewModel item) await KillSingleLockProcessAsync(item); },
+            _ => !IsGlobalBusy);
+
+        LocateLockProcessCommand = new RelayCommand(p =>
+        {
+            if (p is FileLockItemViewModel item && File.Exists(item.Info.ProcessPath))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{item.Info.ProcessPath}\"",
+                    UseShellExecute = true
+                });
+                AppendLog($"已在资源管理器定位占用进程程序：{item.Info.ProcessPath}");
+            }
+        });
+
+        ToggleUnlockRightClickMenuCommand = new RelayCommand(_ =>
+        {
+            bool targetEnable = !IsRightClickUnlockIntegrated;
+            var res = FileLockManager.SetRightClickIntegration(targetEnable, AppendLog);
+            AppendLog(res.Success ? $"✔ {res.Message}" : $"✖ {res.Message}");
+            IsRightClickUnlockIntegrated = FileLockManager.IsRightClickIntegrationEnabled();
+        });
+
         ClearLogCommand = new RelayCommand(_ =>
         {
             _logBuilder.Clear();
             LogText = string.Empty;
         });
 
+        IsRightClickUnlockIntegrated = FileLockManager.IsRightClickIntegrationEnabled();
         ApplyFilters();
         AppendLog($"系统识别：{OsSummary} | 管理员权限：{(IsAdmin ? "已获取" : "未获取")}");
     }
@@ -299,16 +390,43 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsEnvView));
                 OnPropertyChanged(nameof(IsContextMenuView));
                 OnPropertyChanged(nameof(IsStartupView));
+                OnPropertyChanged(nameof(IsFileLockView));
                 UpdateHeaders();
                 ApplyFilters();
             }
         }
     }
 
-    public bool IsTweaksView => !IsEnvView && !IsContextMenuView && !IsStartupView;
+    public bool IsTweaksView => !IsEnvView && !IsContextMenuView && !IsStartupView && !IsFileLockView;
     public bool IsEnvView => SelectedNavKey.StartsWith("ENV_", StringComparison.Ordinal);
     public bool IsContextMenuView => SelectedNavKey == "CTX_MENU";
     public bool IsStartupView => SelectedNavKey == "STARTUP_MGR";
+    public bool IsFileLockView => SelectedNavKey == "FILE_LOCK";
+
+    public string FileLockTargetPath
+    {
+        get => _fileLockTargetPath;
+        set => SetProperty(ref _fileLockTargetPath, value);
+    }
+
+    public string FileLockSummaryText
+    {
+        get => _fileLockSummaryText;
+        private set => SetProperty(ref _fileLockSummaryText, value);
+    }
+
+    public bool IsRightClickUnlockIntegrated
+    {
+        get => _isRightClickUnlockIntegrated;
+        private set
+        {
+            if (SetProperty(ref _isRightClickUnlockIntegrated, value))
+                OnPropertyChanged(nameof(RightClickUnlockButtonText));
+        }
+    }
+
+    public string RightClickUnlockButtonText => IsRightClickUnlockIntegrated ? "移除右键「解除占用」" : "添加到系统右键菜单";
+    public bool HasFileLocks => FileLocks.Count > 0;
 
     public string StartupFilter
     {
@@ -484,6 +602,7 @@ public sealed class MainViewModel : ObservableObject
             "CAT_UPDATE" => ("系统更新控制", "控制系统自动更新策略，一键长效暂停更新 100 年免打扰"),
             "CTX_MENU" => ("右键菜单自定义管理", "所见即所得无损隐藏或恢复桌面、文件、文件夹右键项目（绝大部分下一次右键即刻生效）"),
             "STARTUP_MGR" => ("开机启动项管理", "与系统任务管理器 100% 同步：无损启用/禁用自启项、一键定位源文件与清理残留失效项"),
+            "FILE_LOCK" => ("文件 / 文件夹占用解除", "三重引擎精准定位锁定进程与 DLL 模块：支持不杀进程强断句柄、结束锁定进程、强制删除与重启自动清除"),
             "ENV_ALL" => ("开发环境与工具安装", "基于微软官方 winget 静默部署本机必备 Python / Node.js / Git / .NET / VC++ 环境"),
             _ => ("全部系统与游戏优化", "")
         };
@@ -983,6 +1102,225 @@ public sealed class MainViewModel : ObservableObject
             }
             AppendLog($"========== 批量启动项管理完成：成功 {ok} / {selected.Count} 项 ==========");
             ApplyFilters();
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+    }
+
+    public void OpenFileUnlockerWithPath(string path)
+    {
+        SelectedNavKey = "FILE_LOCK";
+        FileLockTargetPath = FileLockManager.NormalizeTargetPath(path);
+        _ = ScanFileLocksAsync();
+    }
+
+    public async Task ScanFileLocksAsync()
+    {
+        string normalized = FileLockManager.NormalizeTargetPath(FileLockTargetPath);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            FileLockSummaryText = "请先粘贴路径、点击「选择文件 / 选择文件夹」，或直接把文件拖入此窗口。";
+            return;
+        }
+
+        FileLockTargetPath = normalized;
+        IsGlobalBusy = true;
+        FileLocks.Clear();
+        OnPropertyChanged(nameof(HasFileLocks));
+        FileLockSummaryText = $"正在深度扫描占用：{normalized} ...";
+
+        try
+        {
+            AppendLog($"▶ 开始扫描文件/文件夹占用：{normalized}");
+            var locks = await FileLockManager.ScanLocksAsync(normalized, AppendLog);
+            foreach (var info in locks)
+                FileLocks.Add(new FileLockItemViewModel(info));
+
+            OnPropertyChanged(nameof(HasFileLocks));
+
+            if (!File.Exists(normalized) && !Directory.Exists(normalized))
+            {
+                FileLockSummaryText = "目标文件或文件夹已不存在。";
+                AppendLog("ℹ 目标路径当前已不存在磁盘上。");
+            }
+            else if (locks.Count == 0)
+            {
+                FileLockSummaryText = "✔ 未检测到任何进程占用此路径！现在可以直接删除或重命名（若仍报错可点「解除占用并强制删除」清除只读属性）。";
+                AppendLog("✔ 扫描完成：当前没有任何进程锁定该路径。");
+            }
+            else
+            {
+                FileLockSummaryText = $"⚠ 共检测到 {locks.Count} 个进程正在占用此路径，可点击单项断开句柄 / 结束进程，或点上方「一键解除全部占用」。";
+                AppendLog($"⚠ 扫描完成：共发现 {locks.Count} 个占用进程。");
+            }
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+    }
+
+    private async Task CloseSingleLockHandleAsync(FileLockItemViewModel item)
+    {
+        IsGlobalBusy = true;
+        try
+        {
+            var res = await FileLockManager.CloseHandlesOnlyAsync(item.Info, AppendLog);
+            AppendLog(res.Success ? $"✔ {res.Message}" : $"✖ {res.Message}");
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+        await ScanFileLocksAsync();
+    }
+
+    private async Task KillSingleLockProcessAsync(FileLockItemViewModel item)
+    {
+        if (!item.IsExplorer)
+        {
+            var confirm = MessageBox.Show(
+                $"确定要强制结束进程「{item.Info.ProcessName} (PID: {item.ProcessId})」以解除文件占用吗？",
+                "确认结束占用进程",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes) return;
+        }
+
+        IsGlobalBusy = true;
+        try
+        {
+            var res = await FileLockManager.TerminateLockingProcessAsync(item.Info, AppendLog);
+            AppendLog(res.Success ? $"✔ {res.Message}" : $"✖ {res.Message}");
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+        await ScanFileLocksAsync();
+    }
+
+    private async Task UnlockAllLocksAsync()
+    {
+        string normalized = FileLockManager.NormalizeTargetPath(FileLockTargetPath);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            MessageBox.Show("请先选择或拖入需要解除占用的文件/文件夹！", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (FileLocks.Count == 0)
+            await ScanFileLocksAsync();
+
+        if (FileLocks.Count == 0)
+            return;
+
+        IsGlobalBusy = true;
+        try
+        {
+            var list = FileLocks.Select(x => x.Info).ToList();
+            var res = await FileLockManager.UnlockAllAsync(list, AppendLog);
+            AppendLog(res.Success ? $"✔ {res.Message}" : $"✖ {res.Message}");
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+        await ScanFileLocksAsync();
+    }
+
+    private async Task UnlockAndForceDeleteAsync()
+    {
+        string normalized = FileLockManager.NormalizeTargetPath(FileLockTargetPath);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            MessageBox.Show("请先选择或拖入需要强制删除的文件/文件夹！", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!File.Exists(normalized) && !Directory.Exists(normalized))
+        {
+            MessageBox.Show("目标文件或文件夹已经不存在了。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"确定要解除占用并【永久删除】以下目标吗？（不经过回收站，删除后无法撤销！）\n\n{normalized}",
+            "确认解除占用并强制删除",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        IsGlobalBusy = true;
+        try
+        {
+            AppendLog($"========== 开始解除占用并强制删除：{normalized} ==========");
+            var locks = await FileLockManager.ScanLocksAsync(normalized, AppendLog);
+            if (locks.Count > 0)
+            {
+                await FileLockManager.UnlockAllAsync(locks, AppendLog);
+            }
+
+            var (deleted, msg) = await FileLockManager.ForceDeleteTargetAsync(normalized, AppendLog);
+            AppendLog(deleted ? $"✔ {msg}" : $"✖ {msg}");
+
+            if (deleted)
+            {
+                FileLocks.Clear();
+                OnPropertyChanged(nameof(HasFileLocks));
+                FileLockSummaryText = $"✔ 已成功解除占用并彻底删除：{normalized}";
+            }
+            else
+            {
+                var askRebootDel = MessageBox.Show(
+                    $"{msg}\n\n是否登记为「下次重启电脑时由 Windows 内核自动强制删除」？",
+                    "无法即时删除",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (askRebootDel == MessageBoxResult.Yes)
+                {
+                    var schedRes = await FileLockManager.ScheduleDeleteOnRebootAsync(normalized, AppendLog);
+                    AppendLog(schedRes.Success ? $"✔ {schedRes.Message}" : $"✖ {schedRes.Message}");
+                    if (schedRes.RecommendSystemReboot)
+                        MarkPendingSystemReboot($"重启自动删除 {Path.GetFileName(normalized)}");
+                }
+            }
+        }
+        finally
+        {
+            IsGlobalBusy = false;
+        }
+    }
+
+    private async Task ScheduleDeleteOnRebootAsync()
+    {
+        string normalized = FileLockManager.NormalizeTargetPath(FileLockTargetPath);
+        if (string.IsNullOrWhiteSpace(normalized) || (!File.Exists(normalized) && !Directory.Exists(normalized)))
+        {
+            MessageBox.Show("请先选择或拖入存在的目标文件/文件夹！", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"确定要登记下次重启电脑时自动永久删除吗？\n\n{normalized}",
+            "确认重启时自动删除",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        IsGlobalBusy = true;
+        try
+        {
+            var res = await FileLockManager.ScheduleDeleteOnRebootAsync(normalized, AppendLog);
+            AppendLog(res.Success ? $"✔ {res.Message}" : $"✖ {res.Message}");
+            if (res.Success)
+            {
+                FileLockSummaryText = $"✔ {res.Message}";
+                if (res.RecommendSystemReboot)
+                    MarkPendingSystemReboot($"重启自动删除 {Path.GetFileName(normalized)}");
+            }
         }
         finally
         {

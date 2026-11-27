@@ -11,7 +11,7 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <AssemblyName>WinOptimizer</AssemblyName>
     <RootNamespace>WinOptimizer</RootNamespace>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Product>WinOptimizer 系统一键优化工具</Product>
     <Description>模块化 Windows 10/11 系统优化与状态管理工具</Description>
   </PropertyGroup>

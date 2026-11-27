@@ -4,6 +4,9 @@
         Title="WinOptimizer — Windows 一键系统优化与开发环境部署工具"
         Width="1040" Height="680"
         MinWidth="820" MinHeight="500"
+        AllowDrop="True"
+        PreviewDragOver="Window_PreviewDragOver"
+        Drop="Window_Drop"
         WindowStartupLocation="Manual"
         Background="{StaticResource BgApp}"
         Foreground="{StaticResource TextPrimary}"
@@ -26,7 +29,7 @@
                         </Border>
                         <StackPanel>
                             <TextBlock Text="WinOptimizer" FontSize="16" FontWeight="Bold" Foreground="White" />
-                            <TextBlock Text="模块化一键优化中心 v1.2" FontSize="11" Foreground="{StaticResource TextMuted}" />
+                            <TextBlock Text="模块化一键优化中心 v1.3" FontSize="11" Foreground="{StaticResource TextMuted}" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -136,6 +139,14 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
                                 <TextBlock Text="开机启动项管理" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="FileLockNavRadio" GroupName="MainSidebarNav" Style="{StaticResource NavRadioStyle}"
+                                     Command="{Binding NavigateCommand}" CommandParameter="FILE_LOCK">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE785;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="文件占用解除" VerticalAlignment="Center" />
                             </StackPanel>
                         </RadioButton>
 
@@ -324,6 +335,19 @@
                                 </Button>
                                 <Button Style="{StaticResource SecondaryBtn}" Command="{Binding EnableSelectedStartupsCommand}" Margin="0,0,8,0" Content="批量允许自启" />
                                 <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RefreshAllCommand}" Content="重新扫描启动项" />
+                            </WrapPanel>
+
+                            <!-- 文件占用解除模式的工具栏 -->
+                            <WrapPanel Visibility="{Binding IsFileLockView, Converter={StaticResource BoolToVis}}">
+                                <Button Style="{StaticResource PrimaryBtn}" Command="{Binding UnlockAllLocksCommand}" Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE785;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="一键解除全部占用" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource PrimaryBtn}" Background="#B91C1C" Command="{Binding UnlockAndDeleteTargetCommand}" Margin="0,0,8,0" Content="解除占用并强制删除" />
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding ScheduleDeleteOnRebootCommand}" Margin="0,0,8,0" Content="重启时自动删除" />
+                                <Button Style="{StaticResource SecondaryBtn}" Command="{Binding ToggleUnlockRightClickMenuCommand}" Content="{Binding RightClickUnlockButtonText}" />
                             </WrapPanel>
                         </Grid>
                     </DockPanel>
@@ -721,6 +745,116 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
+
+                <!-- 5. 文件 / 文件夹占用解除页面 -->
+                <Grid Visibility="{Binding IsFileLockView, Converter={StaticResource BoolToVis}}" Margin="24,14,24,10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 路径输入与浏览/拖拽区 -->
+                    <Border Grid.Row="0" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Background="#11151E" BorderBrush="#333C52" BorderThickness="1" CornerRadius="6" Padding="10,0" Height="34" Margin="0,0,10,0">
+                                <Grid>
+                                    <TextBox Text="{Binding FileLockTargetPath, UpdateSourceTrigger=PropertyChanged}"
+                                             Background="Transparent" BorderThickness="0" Foreground="White" CaretBrush="White"
+                                             VerticalContentAlignment="Center" FontFamily="Consolas, Microsoft YaHei UI" FontSize="12.5"
+                                             KeyDown="FileLockPathBox_KeyDown" />
+                                    <TextBlock Text="拖入文件 / 文件夹，或粘贴路径（如 &quot;D:\adobe\...\AdobeGrowthSDK.dll&quot;）后回车..."
+                                               Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center" IsHitTestVisible="False">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding FileLockTargetPath}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
+
+                            <Button Grid.Column="1" Style="{StaticResource SecondaryBtn}" Command="{Binding BrowseLockFileCommand}" Content="选择文件" Margin="0,0,8,0" Height="34" />
+                            <Button Grid.Column="2" Style="{StaticResource SecondaryBtn}" Command="{Binding BrowseLockFolderCommand}" Content="选择文件夹" Margin="0,0,8,0" Height="34" />
+                            <Button Grid.Column="3" Style="{StaticResource PrimaryBtn}" Command="{Binding ScanFileLocksCommand}" Content="扫描占用" Height="34" Padding="16,0" />
+                        </Grid>
+                    </Border>
+
+                    <!-- 扫描状态摘要 -->
+                    <Border Grid.Row="1" Background="#141925" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,10">
+                        <TextBlock Text="{Binding FileLockSummaryText}" Foreground="#E2E8F0" FontSize="12.5" TextWrapping="Wrap" />
+                    </Border>
+
+                    <!-- 占用进程卡片列表 -->
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding FileLocks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
+                                            CornerRadius="10" Padding="16,12" Margin="0,0,0,9">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0" Width="38" Height="38" CornerRadius="8" Background="#2B1C22" VerticalAlignment="Center" Margin="0,0,14,0">
+                                                <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#F87171"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,14,0">
+                                                <WrapPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ProcessHeader}" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                    <Border Background="#232B3E" CornerRadius="4" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding MethodBadge}" FontSize="10.5" Foreground="#93C5FD" />
+                                                    </Border>
+                                                    <Border Visibility="{Binding IsCritical, Converter={StaticResource BoolToVis}}"
+                                                            Background="#3B2314" BorderBrush="#7C3F19" BorderThickness="1" CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
+                                                        <TextBlock Text="系统核心进程（防误杀）" FontSize="10.5" Foreground="#FBBF24" />
+                                                    </Border>
+                                                </WrapPanel>
+                                                <TextBlock Text="{Binding ProcessPath}" FontSize="11.5" Foreground="{StaticResource TextSecondary}"
+                                                           FontFamily="Consolas" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" ToolTip="{Binding ProcessPath}" />
+                                                <TextBlock Text="{Binding LockedTargetPath}" FontSize="11" Foreground="{StaticResource TextMuted}"
+                                                           FontFamily="Consolas" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" ToolTip="{Binding LockedTargetPath}" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Button Style="{StaticResource SecondaryBtn}" Content="仅断开句柄" Margin="0,0,6,0" Padding="9,5" FontSize="11.5"
+                                                        Visibility="{Binding CanCloseHandleOnly, Converter={StaticResource BoolToVis}}"
+                                                        ToolTip="不结束进程，直接强行关闭该进程持有的此文件句柄"
+                                                        Command="{Binding DataContext.CloseSingleHandleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Style="{StaticResource SecondaryBtn}" Content="{Binding KillButtonText}" Margin="0,0,6,0" Padding="10,5" FontSize="11.5"
+                                                        Visibility="{Binding CanKillProcess, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.KillSingleLockProcessCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Style="{StaticResource SecondaryBtn}" Content="定位" Padding="8,5" FontSize="11.5"
+                                                        Visibility="{Binding CanLocateProcess, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.LocateLockProcessCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
 
             <!-- 底部实时终端日志面板 -->

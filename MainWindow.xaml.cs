@@ -8,21 +8,19 @@ namespace WinOptimizer;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private readonly string? _initialUnlockTarget;
 
-    public MainWindow()
+    public MainWindow(string? initialUnlockTarget = null)
     {
         InitializeComponent();
         FitWindowToWorkArea();
 
+        _initialUnlockTarget = initialUnlockTarget;
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
         Loaded += OnMainWindowLoaded;
     }
 
-    /// <summary>
-    /// 根据当前显示器可用工作区（自动适配 150%/175%/200% 高 DPI 缩放）自适应窗口尺寸并居中，
-    /// 保证顶部标题栏永远完整处于屏幕可见范围内，绝不顶出屏幕上沿。
-    /// </summary>
     private void FitWindowToWorkArea()
     {
         var workArea = SystemParameters.WorkArea;
@@ -38,12 +36,50 @@ public partial class MainWindow : Window
 
     private async void OnMainWindowLoaded(object sender, RoutedEventArgs e)
     {
+        if (!string.IsNullOrWhiteSpace(_initialUnlockTarget))
+        {
+            OpenFileUnlocker(_initialUnlockTarget);
+        }
         await _viewModel.InitializeAsync();
+    }
+
+    public void OpenFileUnlocker(string targetPath)
+    {
+        FileLockNavRadio.IsChecked = true;
+        _viewModel.OpenFileUnlockerWithPath(targetPath);
     }
 
     private void ConsoleLogBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         ConsoleLogBox.ScrollToEnd();
+    }
+
+    private void FileLockPathBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            _ = _viewModel.ScanFileLocksAsync();
+        }
+    }
+
+    private void Window_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    private void Window_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop) &&
+            e.Data.GetData(DataFormats.FileDrop) is string[] files &&
+            files.Length > 0)
+        {
+            OpenFileUnlocker(files[0]);
+            e.Handled = true;
+        }
     }
 
     private void HeaderArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -56,7 +92,7 @@ public partial class MainWindow : Window
             }
             catch
             {
-                // ignore if mouse released before DragMove completes
+                // ignore
             }
         }
     }
