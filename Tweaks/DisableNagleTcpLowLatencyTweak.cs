@@ -18,6 +18,7 @@ public sealed class DisableNagleTcpLowLatencyTweak : ITweakModule
     public string Category => "游戏与延迟";
     public string IconGlyph => "\uE774"; // Network / Globe icon
     public bool NeedsExplorerRestart => false;
+    public TweakRestartRequirement RestartRequirement => TweakRestartRequirement.SystemReboot;
 
     public Task<TweakStatus> CheckStatusAsync()
     {

@@ -26,7 +26,7 @@
                         </Border>
                         <StackPanel>
                             <TextBlock Text="WinOptimizer" FontSize="16" FontWeight="Bold" Foreground="White" />
-                            <TextBlock Text="模块化一键优化中心 v1.1" FontSize="11" Foreground="{StaticResource TextMuted}" />
+                            <TextBlock Text="模块化一键优化中心 v1.2" FontSize="11" Foreground="{StaticResource TextMuted}" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -330,15 +330,34 @@
                 </Grid>
             </Border>
 
-            <!-- 资源管理器重启提示条 -->
-            <Border Grid.Row="1" Visibility="{Binding ShowExplorerRestartBanner, Converter={StaticResource BoolToVis}}"
-                    Background="#2B2112" BorderBrush="#6B4E1B" BorderThickness="0,0,0,1" Padding="24,8">
-                <DockPanel>
-                    <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryBtn}" Command="{Binding RestartExplorerCommand}" Content="立即重启资源管理器" Padding="10,4" />
-                    <TextBlock Text="&#xE7BA;  提示：右键菜单或壳层设置已更改，重启 Windows 资源管理器后即可立即生效。"
-                               Foreground="#FBBF24" FontSize="12.5" VerticalAlignment="Center" />
-                </DockPanel>
-            </Border>
+            <!-- 动态生效提示横幅区（重启电脑 / 重启资源管理器） -->
+            <StackPanel Grid.Row="1">
+                <!-- 1. 需要重启电脑的醒目横幅 -->
+                <Border Visibility="{Binding ShowSystemRebootBanner, Converter={StaticResource BoolToVis}}"
+                        Background="#361B18" BorderBrush="#993B2F" BorderThickness="0,0,0,1" Padding="24,8">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <Button Style="{StaticResource PrimaryBtn}" Background="#DC2626" Command="{Binding RebootComputerCommand}" Content="立即重启电脑" Padding="10,4" FontSize="12" Margin="0,0,8,0" />
+                            <Button Style="{StaticResource SecondaryBtn}" Command="{Binding DismissRebootBannerCommand}" Content="稍后重启" Padding="9,4" FontSize="12" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding SystemRebootBannerText}" TextWrapping="Wrap"
+                                   Foreground="#FCA5A5" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                </Border>
+
+                <!-- 2. 需要重启资源管理器的提示横幅 -->
+                <Border Visibility="{Binding ShowExplorerRestartBanner, Converter={StaticResource BoolToVis}}"
+                        Background="#2B2112" BorderBrush="#6B4E1B" BorderThickness="0,0,0,1" Padding="24,8">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <Button Style="{StaticResource SecondaryBtn}" Command="{Binding RestartExplorerCommand}" Content="立即重启资源管理器" Padding="10,4" FontSize="12" Margin="0,0,8,0" />
+                            <Button Style="{StaticResource SecondaryBtn}" Command="{Binding DismissExplorerBannerCommand}" Content="忽略" Padding="8,4" FontSize="12" />
+                        </StackPanel>
+                        <TextBlock Text="提示：桌面 / 右键菜单 / 开始菜单等壳层设置已变更（开启或关闭均需重启资源管理器后立即生效）。" TextWrapping="Wrap"
+                                   Foreground="#FBBF24" FontSize="12.5" VerticalAlignment="Center" />
+                    </DockPanel>
+                </Border>
+            </StackPanel>
 
             <!-- 中部滚动卡片列表区 -->
             <Grid Grid.Row="2">
@@ -371,14 +390,29 @@
 
                                         <!-- 标题与详细描述 -->
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,16,0">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
-                                                <Border Background="#232B3E" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                            <WrapPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,2" />
+                                                <Border Background="#232B3E" CornerRadius="4" Padding="6,2" Margin="0,0,6,2" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Category}" FontSize="10.5" Foreground="#93C5FD" />
                                                 </Border>
-                                            </StackPanel>
+                                                <Border Visibility="{Binding IsSystemRebootRequired, Converter={StaticResource BoolToVis}}"
+                                                        Background="#3A2116" BorderBrush="#7C3A1D" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="0,0,6,2" VerticalAlignment="Center"
+                                                        ToolTip="此项开启或关闭（恢复默认）后，均需重启电脑才能完全生效">
+                                                    <TextBlock Text="需重启电脑" FontSize="10.5" FontWeight="SemiBold" Foreground="#FDBA74" />
+                                                </Border>
+                                                <Border Visibility="{Binding IsExplorerRestartRequired, Converter={StaticResource BoolToVis}}"
+                                                        Background="#152B3C" BorderBrush="#1E4D6B" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="0,0,6,2" VerticalAlignment="Center"
+                                                        ToolTip="此项开启或关闭（恢复默认）后，需重启资源管理器才能生效">
+                                                    <TextBlock Text="需重启资源管理器" FontSize="10.5" FontWeight="SemiBold" Foreground="#7DD3FC" />
+                                                </Border>
+                                                <Border Visibility="{Binding IsInstantEffect, Converter={StaticResource BoolToVis}}"
+                                                        Background="#1A2230" BorderBrush="#2A3548" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="0,0,6,2" VerticalAlignment="Center"
+                                                        ToolTip="此项开启或关闭后即时生效，无需重启">
+                                                    <TextBlock Text="即时生效" FontSize="10.5" Foreground="#94A3B8" />
+                                                </Border>
+                                            </WrapPanel>
                                             <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{StaticResource TextSecondary}"
-                                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                                                       TextWrapping="Wrap" Margin="0,3,0,0" />
                                             <TextBlock Text="{Binding TechnicalDetail}" FontSize="11" Foreground="{StaticResource TextMuted}"
                                                        FontFamily="Consolas" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
                                         </StackPanel>

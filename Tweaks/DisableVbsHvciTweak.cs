@@ -19,6 +19,7 @@ public sealed class DisableVbsHvciTweak : ITweakModule
     public string Category => "游戏与延迟";
     public string IconGlyph => "\uE7FC"; // Game controller icon
     public bool NeedsExplorerRestart => false;
+    public TweakRestartRequirement RestartRequirement => TweakRestartRequirement.SystemReboot;
 
     public Task<TweakStatus> CheckStatusAsync()
     {

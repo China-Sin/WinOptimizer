@@ -22,6 +22,10 @@ public sealed class TweakItemViewModel : ObservableObject
     public string Category => Module.Category;
     public string IconGlyph => Module.IconGlyph;
     public bool NeedsExplorerRestart => Module.NeedsExplorerRestart;
+    public TweakRestartRequirement RestartRequirement => Module.RestartRequirement;
+    public bool IsSystemRebootRequired => RestartRequirement == TweakRestartRequirement.SystemReboot;
+    public bool IsExplorerRestartRequired => RestartRequirement == TweakRestartRequirement.ExplorerRestart;
+    public bool IsInstantEffect => RestartRequirement == TweakRestartRequirement.None;
 
     public bool IsSelectedForBatch
     {

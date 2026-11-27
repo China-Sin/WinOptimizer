@@ -25,6 +25,7 @@ public sealed partial class MergeSvcHostProcessesTweak : ITweakModule
     public string Category => "性能与电源";
     public string IconGlyph => "\uE950";
     public bool NeedsExplorerRestart => false;
+    public TweakRestartRequirement RestartRequirement => TweakRestartRequirement.SystemReboot;
 
     public Task<TweakStatus> CheckStatusAsync()
     {

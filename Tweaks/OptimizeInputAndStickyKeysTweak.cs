@@ -42,6 +42,7 @@ public sealed partial class OptimizeInputAndStickyKeysTweak : ITweakModule
     public string Category => "游戏与延迟";
     public string IconGlyph => "\uE962";
     public bool NeedsExplorerRestart => false;
+    public TweakRestartRequirement RestartRequirement => TweakRestartRequirement.SystemReboot;
 
     public Task<TweakStatus> CheckStatusAsync()
     {

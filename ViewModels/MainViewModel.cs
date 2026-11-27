@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Text;
 using System.Windows;
 using WinOptimizer.Core;
@@ -12,6 +13,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly List<EnvItemViewModel> _allEnvs;
     private readonly List<ContextMenuItemViewModel> _allContextMenus = [];
     private readonly List<StartupItemViewModel> _allStartupItems = [];
+    private readonly HashSet<string> _pendingRebootTitles = [];
     private readonly StringBuilder _logBuilder = new();
 
     private string _selectedNavKey = "ALL_TWEAKS";
@@ -21,6 +23,8 @@ public sealed class MainViewModel : ObservableObject
     private string _searchQuery = string.Empty;
     private bool _isGlobalBusy;
     private bool _showExplorerRestartBanner;
+    private bool _showSystemRebootBanner;
+    private string _systemRebootBannerText = "提示：部分底层优化项在开启或关闭（恢复默认）后，需重启电脑才能完全生效。";
     private string _logText = string.Empty;
     private string _pageHeaderTitle = "全部系统与游戏优化";
     private string _pageHeaderSubtitle = "实时检测系统当前状态，支持单项开关切换与一键批量优化 / 恢复默认";
@@ -42,6 +46,9 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RevertSelectedTweaksCommand { get; }
     public RelayCommand RefreshAllCommand { get; }
     public RelayCommand RestartExplorerCommand { get; }
+    public RelayCommand DismissExplorerBannerCommand { get; }
+    public RelayCommand RebootComputerCommand { get; }
+    public RelayCommand DismissRebootBannerCommand { get; }
     public RelayCommand PurgeStandbyRamCommand { get; }
     public RelayCommand CleanShaderCacheCommand { get; }
 
@@ -131,6 +138,31 @@ public sealed class MainViewModel : ObservableObject
                 }
             },
             _ => !IsGlobalBusy);
+
+        DismissExplorerBannerCommand = new RelayCommand(_ => ShowExplorerRestartBanner = false);
+
+        RebootComputerCommand = new RelayCommand(
+            _ =>
+            {
+                var confirm = MessageBox.Show(
+                    "确定要现在立即重启电脑吗？\n\n请先确保 Premiere Pro、浏览器或文档中的未保存工作已经保存完毕。",
+                    "确认重启电脑",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (confirm != MessageBoxResult.Yes) return;
+
+                AppendLog("正在执行系统重启命令 (shutdown /r /t 0)...");
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "shutdown.exe",
+                    Arguments = "/r /t 0",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                });
+            },
+            _ => !IsGlobalBusy);
+
+        DismissRebootBannerCommand = new RelayCommand(_ => ShowSystemRebootBanner = false);
 
         PurgeStandbyRamCommand = new RelayCommand(
             async _ =>
@@ -344,6 +376,18 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _showExplorerRestartBanner;
         set => SetProperty(ref _showExplorerRestartBanner, value);
+    }
+
+    public bool ShowSystemRebootBanner
+    {
+        get => _showSystemRebootBanner;
+        set => SetProperty(ref _showSystemRebootBanner, value);
+    }
+
+    public string SystemRebootBannerText
+    {
+        get => _systemRebootBannerText;
+        private set => SetProperty(ref _systemRebootBannerText, value);
     }
 
     public string LogText
@@ -565,8 +609,19 @@ public sealed class MainViewModel : ObservableObject
                 : await item.Module.RevertAsync(AppendLog);
 
             AppendLog(result.Success ? $"✔ {result.Message}" : $"✖ {result.Message}");
-            if (result.RecommendExplorerRestart)
-                ShowExplorerRestartBanner = true;
+            if (result.Success)
+            {
+                if (result.RecommendExplorerRestart || item.IsExplorerRestartRequired)
+                {
+                    ShowExplorerRestartBanner = true;
+                    AppendLog($"  ℹ 「{item.Title}」开启或关闭后均需重启资源管理器才能完全生效。");
+                }
+                if (result.RecommendSystemReboot || item.IsSystemRebootRequired)
+                {
+                    MarkPendingSystemReboot(item.Title);
+                    AppendLog($"  ⚠ 「{item.Title}」属于底层内核/驱动配置，开启或关闭后均需重启电脑才能完全生效！");
+                }
+            }
 
             await item.RefreshStatusAsync();
             ApplyFilters();
@@ -576,6 +631,16 @@ public sealed class MainViewModel : ObservableObject
             item.IsBusy = false;
             IsGlobalBusy = false;
         }
+    }
+
+    private void MarkPendingSystemReboot(string itemTitle)
+    {
+        _pendingRebootTitles.Add(itemTitle);
+        string summary = _pendingRebootTitles.Count == 1
+            ? $"「{_pendingRebootTitles.First()}」"
+            : $"「{_pendingRebootTitles.First()}」等 {_pendingRebootTitles.Count} 项底层设置";
+        SystemRebootBannerText = $"提示：你刚才变更了{summary}（开启或恢复默认均需重启电脑后才能完全生效）。";
+        ShowSystemRebootBanner = true;
     }
 
     private async Task BatchExecuteTweaksAsync(bool applyOptimization)
@@ -590,6 +655,7 @@ public sealed class MainViewModel : ObservableObject
 
         IsGlobalBusy = true;
         bool needExplorerRestart = false;
+        var rebootTitles = new List<string>();
         int okCount = 0;
 
         try
@@ -606,8 +672,17 @@ public sealed class MainViewModel : ObservableObject
                         : await item.Module.RevertAsync(AppendLog);
 
                     AppendLog(res.Success ? $"  ✔ {res.Message}" : $"  ✖ {res.Message}");
-                    if (res.Success) okCount++;
-                    if (res.RecommendExplorerRestart) needExplorerRestart = true;
+                    if (res.Success)
+                    {
+                        okCount++;
+                        if (res.RecommendExplorerRestart || item.IsExplorerRestartRequired)
+                            needExplorerRestart = true;
+                        if (res.RecommendSystemReboot || item.IsSystemRebootRequired)
+                        {
+                            rebootTitles.Add(item.Title);
+                            MarkPendingSystemReboot(item.Title);
+                        }
+                    }
                     await item.RefreshStatusAsync();
                 }
                 finally
@@ -618,11 +693,17 @@ public sealed class MainViewModel : ObservableObject
 
             AppendLog($"========== 批量任务完成：成功 {okCount} / {selected.Count} 项 ==========");
             ApplyFilters();
-            if (needExplorerRestart)
+
+            if (rebootTitles.Count > 0)
+            {
+                AppendLog($"⚠ 以下 {rebootTitles.Count} 项需重启电脑生效：{string.Join("、", rebootTitles)}");
+            }
+
+            if (needExplorerRestart && rebootTitles.Count == 0)
             {
                 ShowExplorerRestartBanner = true;
                 var ask = MessageBox.Show(
-                    "部分设置（如 Win10 经典右键菜单）需要重启 Windows 资源管理器才能立即生效。\n\n是否现在立即重启资源管理器？",
+                    "部分设置（如右键菜单、开始菜单或任务栏习惯）在开启或关闭后需要重启 Windows 资源管理器才能立即生效。\n\n是否现在立即重启资源管理器？",
                     "需要重启资源管理器",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question);
@@ -630,6 +711,25 @@ public sealed class MainViewModel : ObservableObject
                 {
                     await SystemHelper.RestartExplorerAsync(AppendLog);
                     ShowExplorerRestartBanner = false;
+                }
+            }
+            else if (rebootTitles.Count > 0)
+            {
+                if (needExplorerRestart) ShowExplorerRestartBanner = true;
+                var askReboot = MessageBox.Show(
+                    $"以下 {rebootTitles.Count} 项底层设置（无论开启或恢复默认）均需重启电脑才能完全生效：\n\n• {string.Join("\n• ", rebootTitles)}\n\n是否现在立即重启电脑？（请先保存手头未保存的工作）",
+                    "需要重启电脑生效",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+                if (askReboot == MessageBoxResult.Yes)
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "shutdown.exe",
+                        Arguments = "/r /t 0",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
                 }
             }
         }

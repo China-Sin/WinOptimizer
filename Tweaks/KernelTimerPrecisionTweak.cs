@@ -17,6 +17,7 @@ public sealed class KernelTimerPrecisionTweak : ITweakModule
     public string Category => "游戏与延迟";
     public string IconGlyph => "\uE916"; // Stopwatch / Timer icon
     public bool NeedsExplorerRestart => false;
+    public TweakRestartRequirement RestartRequirement => TweakRestartRequirement.SystemReboot;
 
     public async Task<TweakStatus> CheckStatusAsync()
     {

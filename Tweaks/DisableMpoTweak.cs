@@ -18,6 +18,7 @@ public sealed class DisableMpoTweak : ITweakModule
     public string Category => "游戏与延迟";
     public string IconGlyph => "\uE7F4";
     public bool NeedsExplorerRestart => false;
+    public TweakRestartRequirement RestartRequirement => TweakRestartRequirement.SystemReboot;
 
     public Task<TweakStatus> CheckStatusAsync()
     {

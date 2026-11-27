@@ -42,7 +42,7 @@
 
 ### 三、安全与权限（3 项）
 20. **关闭「打开文件 - 安全警告」弹窗**：写入附件管理器组策略并自动解除 `Downloads` 目录现有文件锁定标记。
-21. **彻底关闭 UAC 权限确认弹窗 & SmartScreen 筛选器**。
+21. **静默关闭 UAC 弹窗 & SmartScreen（安全保沙箱版）**：强制保持 `EnableLUA=1` 保护 Win11 AppContainer 沙箱（避免 Premiere Pro / Adobe UXP、WebView2 与微软商店闪退），仅关闭管理员确认弹窗与暗屏切换实现无感静默提权。
 22. **关闭 Windows Defender 防火墙**：关闭域/专用/公用防火墙配置，保留底层 `mpssvc` 服务存活以免破坏微软商店。
 
 ### 四、桌面与系统更新（7 项）

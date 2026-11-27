@@ -20,7 +20,7 @@ public sealed class CleanExplorerAndTaskbarTweak : ITweakModule
     public string TechnicalDetail => @"Explorer\Advanced (LaunchTo=1, HideFileExt=0, ShowTaskViewButton=0) + SearchboxTaskbarMode=0";
     public string Category => "桌面与体验";
     public string IconGlyph => "\uEC50"; // File Explorer icon
-    public bool NeedsExplorerRestart => false;
+    public bool NeedsExplorerRestart => true;
 
     public Task<TweakStatus> CheckStatusAsync()
     {
